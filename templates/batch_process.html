@@ -1,0 +1,283 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0">Batch PDF Processing</h2>
+    </div>
+    <div class="card-body">
+        {% if not status.running %}
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i> The PDF Cutter Service is not running. Please start the service from the sidebar to use this tool.
+        </div>
+        {% else %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Directory Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="batch-process-form">
+                            <div class="mb-3">
+                                <label for="input_dir" class="form-label">Input Directory (containing PDFs)</label>
+                                <input type="text" class="form-control" id="input_dir" name="input_dir" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="output_dir" class="form-label">Output Directory</label>
+                                <input type="text" class="form-control" id="output_dir" name="output_dir" value="output">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="config_file" class="form-label">Configuration File</label>
+                                <input type="text" class="form-control" id="config_file" name="config_file" value="config.json" required>
+                            </div>
+                            
+                            <div id="config-preview" class="mb-3" style="display: none;">
+                                <h6>Configuration Preview</h6>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <pre id="config-json" style="max-height: 300px; overflow-y: auto;"></pre>
+                                    </div>
+                                </div>
+                                <a href="#" class="btn btn-sm btn-outline-primary mt-2" id="edit-config-btn">
+                                    <i class="fas fa-edit"></i> Edit Configuration
+                                </a>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Process PDFs</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Results Section (hidden initially) -->
+                <div id="results-section" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Processing Results</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="processing-results" class="mb-4">
+                                <!-- Results summary will go here -->
+                            </div>
+                            
+                            <h6>Output Files</h6>
+                            <div id="output-files-container">
+                                <!-- Output files list will go here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Check for config file changes
+        $('#config_file').change(function() {
+            checkConfigFile();
+        });
+        
+        // Check config file on load
+        function checkConfigFile() {
+            const configPath = $('#config_file').val();
+            
+            if (!configPath) {
+                $('#config-preview').hide();
+                return;
+            }
+            
+            $.ajax({
+                url: '/config_editor',
+                type: 'GET',
+                data: { config_path: configPath },
+                success: function(response) {
+                    // Extract the JSON config from the HTML response
+                    const match = response.match(/<pre id="config-json">(.*?)<\/pre>/s);
+                    if (match && match[1]) {
+                        const configJson = match[1].trim();
+                        if (configJson) {
+                            $('#config-json').text(configJson);
+                            $('#config-preview').show();
+                        } else {
+                            $('#config-preview').hide();
+                        }
+                    } else {
+                        $('#config-preview').hide();
+                    }
+                },
+                error: function() {
+                    $('#config-preview').hide();
+                }
+            });
+        }
+        
+        // Edit config button
+        $('#edit-config-btn').click(function(e) {
+            e.preventDefault();
+            const configPath = $('#config_file').val();
+            window.location.href = `/config_editor?config_path=${encodeURIComponent(configPath)}`;
+        });
+        
+        // Process batch form
+        $('#batch-process-form').submit(function(e) {
+            e.preventDefault();
+            
+            const inputDir = $('#input_dir').val();
+            const outputDir = $('#output_dir').val();
+            const configFile = $('#config_file').val();
+            
+            if (!inputDir || !configFile) {
+                showAlert('warning', 'Input directory and config file are required');
+                return;
+            }
+            
+            // Process the directory
+            $.ajax({
+                url: '/process_directory',
+                type: 'POST',
+                data: {
+                    input_dir: inputDir,
+                    output_dir: outputDir,
+                    config_file: configFile
+                },
+                beforeSend: function() {
+                    showAlert('info', 'Processing PDFs...');
+                    $('button[type="submit"]').prop('disabled', true);
+                    $('button[type="submit"]').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+                },
+                success: function(response) {
+                    $('button[type="submit"]').prop('disabled', false);
+                    $('button[type="submit"]').html('Process PDFs');
+                    
+                    if (response.success) {
+                        showAlert('success', response.message);
+                        displayResults(response.result, outputDir);
+                    } else {
+                        showAlert('danger', response.message);
+                    }
+                },
+                error: function() {
+                    $('button[type="submit"]').prop('disabled', false);
+                    $('button[type="submit"]').html('Process PDFs');
+                    showAlert('danger', 'Error processing PDFs');
+                }
+            });
+        });
+        
+        // Display processing results
+        function displayResults(result, outputDir) {
+            $('#results-section').show();
+            
+            // Show results summary
+            const summary = $('<div class="alert alert-success"></div>');
+            summary.append(`<p><strong>Summary:</strong></p>`);
+            summary.append(`<p>Processed files: ${result.processed_count}</p>`);
+            summary.append(`<p>Skipped files: ${result.skipped_count}</p>`);
+            
+            if (result.processed && result.processed.length > 0) {
+                summary.append(`<p>Processed:</p>`);
+                const processedList = $('<ul></ul>');
+                result.processed.forEach(function(file) {
+                    processedList.append(`<li>${file}</li>`);
+                });
+                summary.append(processedList);
+            }
+            
+            if (result.skipped && result.skipped.length > 0) {
+                summary.append(`<p>Skipped:</p>`);
+                const skippedList = $('<ul></ul>');
+                result.skipped.forEach(function(file) {
+                    skippedList.append(`<li>${file}</li>`);
+                });
+                summary.append(skippedList);
+            }
+            
+            $('#processing-results').html(summary);
+            
+            // Show output files
+            loadOutputFiles(outputDir);
+        }
+        
+        // Load output files
+        function loadOutputFiles(outputDir) {
+            $.ajax({
+                url: '/list_output_files',
+                type: 'GET',
+                data: { output_dir: outputDir },
+                success: function(response) {
+                    if (response.success) {
+                        const container = $('#output-files-container');
+                        container.empty();
+                        
+                        if (response.files && response.files.length > 0) {
+                            const table = $('<table class="table table-bordered"></table>');
+                            const thead = $('<thead><tr><th>File</th><th>Size</th><th width="100">Actions</th></tr></thead>');
+                            const tbody = $('<tbody></tbody>');
+                            
+                            response.files.forEach(function(file) {
+                                const tr = $('<tr></tr>');
+                                
+                                tr.append(`<td>${file.name}</td>`);
+                                tr.append(`<td>${file.size} KB</td>`);
+                                tr.append(`<td>
+                                    <a href="/download_file?file_path=${encodeURIComponent(file.path)}" class="btn btn-sm btn-primary me-1" title="Download">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-danger delete-file-btn" data-file="${encodeURIComponent(file.path)}" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>`);
+                                
+                                tbody.append(tr);
+                            });
+                            
+                            table.append(thead).append(tbody);
+                            container.append(table);
+                            
+                            // Add delete button handlers
+                            $('.delete-file-btn').click(function() {
+                                const filePath = decodeURIComponent($(this).data('file'));
+                                
+                                $.ajax({
+                                    url: '/delete_file',
+                                    type: 'POST',
+                                    data: { file_path: filePath },
+                                    success: function(response) {
+                                        if (response.success) {
+                                            showAlert('success', response.message);
+                                            // Remove the row
+                                            $(this).closest('tr').remove();
+                                        } else {
+                                            showAlert('danger', response.message);
+                                        }
+                                    }.bind(this),
+                                    error: function() {
+                                        showAlert('danger', 'Error deleting file');
+                                    }
+                                });
+                            });
+                        } else {
+                            container.html('<div class="alert alert-info">No output files found.</div>');
+                        }
+                    } else {
+                        $('#output-files-container').html('<div class="alert alert-danger">' + response.message + '</div>');
+                    }
+                },
+                error: function() {
+                    $('#output-files-container').html('<div class="alert alert-danger">Error loading output files</div>');
+                }
+            });
+        }
+        
+        // Check config file on page load
+        checkConfigFile();
+    });
+</script>
+{% endblock %}

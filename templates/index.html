@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0">PDF Cutter Tool</h2>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-12">
+                <h4>Welcome to the PDF Cutter Tool</h4>
+                <p>This tool allows you to split PDF files into separate documents based on page ranges. You can process single PDFs or batch process multiple files using configuration files.</p>
+                
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-pdf fa-3x mb-3 text-primary"></i>
+                                <h5 class="card-title">Single PDF Splitter</h5>
+                                <p class="card-text">Split a single PDF file into multiple files based on page ranges.</p>
+                                <a href="/single_pdf" class="btn btn-primary">Go to Single PDF Splitter</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-layer-group fa-3x mb-3 text-primary"></i>
+                                <h5 class="card-title">Batch Processing</h5>
+                                <p class="card-text">Process multiple PDF files at once using a configuration file.</p>
+                                <a href="/batch_process" class="btn btn-primary">Go to Batch Processing</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cog fa-3x mb-3 text-primary"></i>
+                                <h5 class="card-title">Configuration Editor</h5>
+                                <p class="card-text">Create and edit configuration files for batch processing.</p>
+                                <a href="/config_editor" class="btn btn-primary">Go to Configuration Editor</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if status.running %}
+                <div class="mt-4">
+                    <h5>Service Status</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <th>Status</th>
+                                    <td><span class="badge bg-success">Running</span></td>
+                                </tr>
+                                {% if status.queue_size is defined %}
+                                <tr>
+                                    <th>Queue Size</th>
+                                    <td>{{ status.queue_size }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if status.processed_files is defined %}
+                                <tr>
+                                    <th>Processed Files</th>
+                                    <td>{{ status.processed_files }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if status.current_task is defined and status.current_task %}
+                                <tr>
+                                    <th>Current Task</th>
+                                    <td>{{ status.current_task }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if status.start_time is defined %}
+                                <tr>
+                                    <th>Started At</th>
+                                    <td>{{ status.start_time }}</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning mt-4">
+                    <i class="fas fa-exclamation-triangle"></i> The PDF Cutter Service is not running. Please start the service from the sidebar to use the tools.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

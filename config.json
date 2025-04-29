@@ -1,0 +1,60 @@
+{
+  "default": {
+    "page_ranges": [
+      {
+        "start": 1,
+        "end": 5,
+        "name": "Introduction"
+      },
+      {
+        "start": 6,
+        "end": 15,
+        "name": "MainContent"
+      },
+      {
+        "start": 16,
+        "end": 20,
+        "name": "Conclusion"
+      }
+    ],
+    "unit_name": "DefaultUnit",
+    "prefix": "NCERT"
+  },
+  "english_textbook": {
+    "page_ranges": [
+      {
+        "start": 1,
+        "end": 10,
+        "name": "Chapter1"
+      },
+      {
+        "start": 11,
+        "end": 25,
+        "name": "Chapter2"
+      },
+      {
+        "start": 26,
+        "end": 40,
+        "name": "Chapter3"
+      }
+    ],
+    "unit_name": "English",
+    "prefix": "Class6"
+  },
+  "^chapter(\\d+)$": {
+    "page_ranges": [
+      {
+        "start": 1,
+        "end": 5,
+        "name": "Introduction"
+      },
+      {
+        "start": 6,
+        "end": 15,
+        "name": "Content"
+      }
+    ],
+    "unit_name": "PatternMatched",
+    "prefix": "NCERT"
+  }
+}
