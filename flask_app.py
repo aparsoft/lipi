@@ -7,63 +7,65 @@ import time
 import subprocess
 import requests
 from datetime import datetime
-from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
 
-# Import the service module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from pdf_cutter_service import PDFCutterService
+from pdf_cutter_service import PDFCutterService, __version__ as SERVICE_VERSION
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "temp")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 app = Flask(__name__)
-app.config["UPLOAD_FOLDER"] = os.path.join(BASE_DIR, "temp")
-# Increase maximum file size to 100 MB
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+app.config["UPLOAD_FOLDER"] = UPLOAD_DIR
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
 
-# Ensure temp and output directories exist
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "output"), exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Global variables
 SERVICE_PROCESS = None
 DEFAULT_SERVICE_URL = "http://localhost:8111"
 
 
+# ---------------------------------------------------------------------------
+# Security helper
+# ---------------------------------------------------------------------------
+
+
 def _safe_path(user_path: str, allowed_base: str = BASE_DIR) -> str:
-    """Resolve user-supplied path and ensure it stays within the allowed base directory."""
+    """
+    Resolve *user_path* relative to *allowed_base* and abort with 403 if
+    the result escapes the allowed directory (path traversal protection).
+    """
     resolved = os.path.realpath(os.path.join(allowed_base, user_path))
-    if not resolved.startswith(
-        os.path.realpath(allowed_base) + os.sep
-    ) and resolved != os.path.realpath(allowed_base):
+    base_real = os.path.realpath(allowed_base)
+    if resolved != base_real and not resolved.startswith(base_real + os.sep):
         abort(403, description="Access denied: path outside allowed directory")
     return resolved
 
 
-def start_service_process(output_dir: str, config_file=None, port: int = 8111):
-    """Start the PDF Cutter Service as a subprocess"""
-    global SERVICE_PROCESS
+# ---------------------------------------------------------------------------
+# Service management
+# ---------------------------------------------------------------------------
 
-    # Build the command
+
+def start_service_process(output_dir: str, config_file=None, port: int = 8111) -> bool:
+    global SERVICE_PROCESS
     cmd = [
         sys.executable,
-        os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "pdf_cutter_service.py"
-        ),
+        os.path.join(BASE_DIR, "pdf_cutter_service.py"),
         "--output-dir",
         output_dir,
         "--port",
         str(port),
     ]
-
     if config_file:
-        cmd.extend(["--config", config_file])
+        cmd += ["--config", config_file]
 
     try:
-        # Start the process
         SERVICE_PROCESS = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -72,512 +74,396 @@ def start_service_process(output_dir: str, config_file=None, port: int = 8111):
             bufsize=1,
             universal_newlines=True,
         )
-
-        # Wait for the service to start
         time.sleep(2)
         return True
-    except Exception as e:
-        print(f"Failed to start service: {e}")
+    except Exception as exc:
+        print(f"Failed to start service: {exc}")
         return False
 
 
-def check_service_status(url=DEFAULT_SERVICE_URL):
-    """Check if the service is running and get its status"""
+def check_service_status(url: str = DEFAULT_SERVICE_URL) -> dict:
     try:
-        response = requests.get(f"{url}/status", timeout=2)
-        if response.status_code == 200:
-            return response.json()
-        return {
-            "running": False,
-            "error": f"Service returned status code {response.status_code}",
-        }
+        resp = requests.get(f"{url}/status", timeout=2)
+        if resp.status_code == 200:
+            return resp.json()
+        return {"running": False, "error": f"HTTP {resp.status_code}"}
     except requests.exceptions.ConnectionError:
         return {"running": False, "error": "Cannot connect to service"}
-    except Exception as e:
-        return {"running": False, "error": str(e)}
+    except Exception as exc:
+        return {"running": False, "error": str(exc)}
 
 
-def get_pdf_info(file_path):
-    """Get information about a PDF file"""
-    service = PDFCutterService()
-    return service.get_pdf_info(file_path)
+def get_pdf_info(file_path: str) -> dict:
+    return PDFCutterService().get_pdf_info(file_path)
 
 
-def correct_hindi_text(text, font_type="auto", service_url=DEFAULT_SERVICE_URL):
+def correct_hindi_text(
+    text: str, font_type: str = "auto", service_url: str = DEFAULT_SERVICE_URL
+) -> dict:
     """
-    Correct Hindi text encoding issues using the service API
-
-    Args:
-        text: Text with encoding issues
-        font_type: Font type ('auto', 'krutidev', 'chanakya')
-        service_url: Service URL
-
-    Returns:
-        Dictionary with original and corrected text
+    Correct legacy Hindi font encoding.  Tries the running service API first;
+    falls back to direct in-process conversion if the service is not available.
     """
     try:
-        # Use service API for text correction
-        url = f"{service_url}/correct_text"
-        data = {"text": text, "font_type": font_type}
+        resp = requests.post(
+            f"{service_url}/correct_text",
+            json={"text": text, "font_type": font_type},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
 
-        response = requests.post(url, json=data, timeout=30)
-
-        if response.status_code == 200:
-            return response.json()
-        else:
-            # Fallback to direct method if API call fails
-            service = PDFCutterService()
-            has_encoding_issues = service.detect_potential_hindi_encoding_issue(text)
-
-            if has_encoding_issues:
-                corrected_text = service.correct_hindi_text(text, font_type)
-                corrected_text = service.post_process_hindi_text(corrected_text)
-
-                return {
-                    "original_text": text,
-                    "has_encoding_issues": True,
-                    "corrected_text": corrected_text,
-                    "detected_font_type": (
-                        font_type if font_type != "auto" else "krutidev"
-                    ),
-                }
-            else:
-                return {
-                    "original_text": text,
-                    "has_encoding_issues": False,
-                    "corrected_text": text,
-                    "detected_font_type": None,
-                }
-    except Exception as e:
-        # Direct method as fallback
-        service = PDFCutterService()
-        has_encoding_issues = service.detect_potential_hindi_encoding_issue(text)
-
-        if has_encoding_issues:
-            corrected_text = service.correct_hindi_text(text, font_type)
-            corrected_text = service.post_process_hindi_text(corrected_text)
-
-            return {
-                "original_text": text,
-                "has_encoding_issues": True,
-                "corrected_text": corrected_text,
-                "detected_font_type": font_type if font_type != "auto" else "krutidev",
-                "error": str(e),
-            }
-        else:
-            return {
-                "original_text": text,
-                "has_encoding_issues": False,
-                "corrected_text": text,
-                "detected_font_type": None,
-                "error": str(e),
-            }
+    # In-process fallback
+    svc = PDFCutterService()
+    has_issues, detected = svc.detect_encoding_issues(text)
+    if has_issues:
+        corrected = svc.convert_to_unicode(text, font_type)
+        corrected = svc.post_process_hindi_text(corrected)
+    else:
+        corrected = text
+    return {
+        "original_text": text,
+        "has_encoding_issues": has_issues,
+        "corrected_text": corrected,
+        "detected_font_type": detected if has_issues else None,
+    }
 
 
 def split_pdf_through_api(
-    input_file,
-    ranges,
-    output_dir,
+    input_file: str,
+    ranges: str,
+    output_dir: str,
     prefix=None,
     unit_name=None,
-    fix_encoding=True,
-    service_url=DEFAULT_SERVICE_URL,
-):
-    """Split a PDF file through the service API"""
+    service_url: str = DEFAULT_SERVICE_URL,
+) -> dict:
     params = {
         "input_file": input_file,
         "ranges": ranges,
         "output_dir": output_dir,
-        "fix_encoding": str(fix_encoding).lower(),
     }
-
     if prefix:
         params["prefix"] = prefix
-
     if unit_name:
         params["unit_name"] = unit_name
 
     try:
-        # We'll construct the URL with proper encoding to handle spaces and special characters
-        url = f"{service_url}/split"
-        response = requests.post(url, params=params, timeout=30)
+        resp = requests.post(f"{service_url}/split", params=params, timeout=60)
+        if resp.status_code == 200:
+            return resp.json()
+        return {"status": "error", "message": resp.text}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"status": "error", "message": response.text}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Routes — pages
+# ---------------------------------------------------------------------------
 
 
 @app.route("/")
 def index():
-    """Main route for the application"""
-    # Check service status
     status = check_service_status()
-
-    return render_template("index.html", status=status)
-
-
-@app.route("/start_service", methods=["POST"])
-def start_service():
-    """Start the PDF Cutter Service"""
-    output_dir = request.form.get("output_dir", "output")
-    port = int(request.form.get("port", 8888))
-    config_file = (
-        request.form.get("config_file", "")
-        if request.form.get("use_config", "") == "on"
-        else None
-    )
-
-    if config_file and not os.path.isfile(config_file):
-        return jsonify(
-            {"success": False, "message": f"Config file not found: {config_file}"}
-        )
-
-    success = start_service_process(output_dir, config_file, port)
-
-    if success:
-        return jsonify({"success": True, "message": "Service started successfully"})
-    else:
-        return jsonify({"success": False, "message": "Failed to start service"})
-
-
-@app.route("/service_status")
-def service_status():
-    """Get service status"""
-    status = check_service_status()
-    return jsonify(status)
+    return render_template("index.html", status=status, version=SERVICE_VERSION)
 
 
 @app.route("/single_pdf")
 def single_pdf():
-    """Page for single PDF processing"""
     status = check_service_status()
     return render_template("single_pdf.html", status=status)
 
 
 @app.route("/batch_process")
 def batch_process():
-    """Page for batch PDF processing"""
     status = check_service_status()
     return render_template("batch_process.html", status=status)
 
 
 @app.route("/config_editor")
 def config_editor():
-    """Page for configuration editing"""
     status = check_service_status()
-
-    # Load config if exists
+    config_path = _safe_path(request.args.get("config_path", "config.json"))
     config_data = {}
-    config_path = request.args.get("config_path", "config.json")
-
-    config_path = _safe_path(config_path)
     if os.path.isfile(config_path):
         try:
-            with open(config_path, "r") as f:
-                config_data = json.load(f)
+            with open(config_path, "r", encoding="utf-8") as fh:
+                config_data = json.load(fh)
         except (json.JSONDecodeError, OSError):
             pass
-
     return render_template(
-        "config_editor.html", status=status, config=config_data, config_path=config_path
+        "config_editor.html",
+        status=status,
+        config=config_data,
+        config_path=config_path,
     )
+
+
+# ---------------------------------------------------------------------------
+# Routes — API
+# ---------------------------------------------------------------------------
+
+
+@app.route("/start_service", methods=["POST"])
+def start_service():
+    out_dir = request.form.get("output_dir", "output")
+    port = int(request.form.get("port", 8888))
+    config_file = (
+        request.form.get("config_file", "") or None
+        if request.form.get("use_config") == "on"
+        else None
+    )
+    if config_file and not os.path.isfile(config_file):
+        return jsonify(
+            {"success": False, "message": f"Config file not found: {config_file}"}
+        )
+    success = start_service_process(out_dir, config_file, port)
+    msg = "Service started successfully" if success else "Failed to start service"
+    return jsonify({"success": success, "message": msg})
+
+
+@app.route("/service_status")
+def service_status():
+    return jsonify(check_service_status())
 
 
 @app.route("/upload_pdf", methods=["POST"])
 def upload_pdf():
-    """Handle PDF upload"""
     if "pdf_file" not in request.files:
-        return jsonify({"success": False, "message": "No file part"})
-
+        return jsonify({"success": False, "message": "No file in request"})
     file = request.files["pdf_file"]
+    if not file.filename:
+        return jsonify({"success": False, "message": "No file selected"})
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({"success": False, "message": "Only PDF files are accepted"})
 
-    if file.filename == "":
-        return jsonify({"success": False, "message": "No selected file"})
-
-    if file and file.filename.lower().endswith(".pdf"):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file.save(file_path)
-
-        # Get PDF info
-        pdf_info = get_pdf_info(file_path)
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "File uploaded successfully",
-                "file_path": file_path,
-                "pdf_info": pdf_info,
-            }
-        )
-
-    return jsonify({"success": False, "message": "Invalid file format"})
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(file_path)
+    return jsonify(
+        {
+            "success": True,
+            "message": "File uploaded",
+            "file_path": file_path,
+            "pdf_info": get_pdf_info(file_path),
+        }
+    )
 
 
 @app.route("/split_pdf", methods=["POST"])
 def split_pdf():
-    """Handle PDF splitting"""
     input_file = request.form.get("input_file")
     ranges = request.form.get("ranges")
-    output_dir = request.form.get("output_dir", "output")
-    prefix = request.form.get("prefix", "")
-    unit_name = request.form.get("unit_name", "")
-    fix_encoding = request.form.get("fix_encoding", "true").lower() == "true"
+    output_dir = request.form.get("output_dir", OUTPUT_DIR)
+    prefix = request.form.get("prefix") or None
+    unit_name = request.form.get("unit_name") or None
 
     if not input_file or not ranges:
         return jsonify(
-            {"success": False, "message": "Input file and ranges are required"}
+            {"success": False, "message": "input_file and ranges are required"}
         )
+
+    # Validate input_file stays within BASE_DIR (path traversal protection)
+    try:
+        input_file = _safe_path(input_file)
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid input file path"})
 
     if not os.path.isfile(input_file):
-        return jsonify(
-            {"success": False, "message": f"Input file not found: {input_file}"}
-        )
+        return jsonify({"success": False, "message": f"File not found: {input_file}"})
 
-    # Process the PDF
-    result = split_pdf_through_api(
-        input_file,
-        ranges,
-        output_dir,
-        prefix if prefix else None,
-        unit_name if unit_name else None,
-        fix_encoding,
-    )
+    try:
+        output_dir = _safe_path(output_dir)
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid output directory"})
 
+    result = split_pdf_through_api(input_file, ranges, output_dir, prefix, unit_name)
     if result.get("status") == "success":
         return jsonify(
             {"success": True, "message": "PDF split successfully", "result": result}
         )
-    else:
-        return jsonify(
-            {"success": False, "message": result.get("message", "Unknown error")}
-        )
+    return jsonify(
+        {"success": False, "message": result.get("message", "Unknown error")}
+    )
 
 
 @app.route("/correct_hindi_text", methods=["POST"])
 def correct_hindi_text_route():
-    """Handle Hindi text encoding correction"""
     text = request.form.get("text", "")
     font_type = request.form.get("font_type", "auto")
-
     if not text:
         return jsonify({"success": False, "message": "No text provided"})
-
-    # Process the text
-    result = correct_hindi_text(text, font_type)
-
-    return jsonify({"success": True, "result": result})
+    return jsonify({"success": True, "result": correct_hindi_text(text, font_type)})
 
 
 @app.route("/extract_pdf_text", methods=["POST"])
 def extract_pdf_text():
-    """Extract text from PDF and optionally correct Hindi encoding"""
     if "pdf_file" not in request.files:
-        return jsonify({"success": False, "message": "No file part"})
+        return jsonify({"success": False, "message": "No file in request"})
 
     file = request.files["pdf_file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"success": False, "message": "Only PDF files are accepted"})
+
     correct_encoding = request.form.get("correct_encoding", "true").lower() == "true"
     font_type = request.form.get("font_type", "auto")
-    page_range = request.form.get("page_range", "")
+    page_range_str = request.form.get("page_range", "")
 
-    if file.filename == "":
-        return jsonify({"success": False, "message": "No selected file"})
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(file_path)
 
-    if file and file.filename.lower().endswith(".pdf"):
+    # Parse optional page range
+    page_range = None
+    if page_range_str:
         try:
-            # Save the file temporarily
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-            file.save(file_path)
+            if "-" in page_range_str:
+                parts = page_range_str.split("-")
+                page_range = (int(parts[0]), int(parts[1]))
+            else:
+                n = int(page_range_str)
+                page_range = (n, n)
+        except (ValueError, IndexError):
+            pass
 
-            # Extract text from the PDF
-            with open(file_path, "rb") as f:
-                pdf_reader = PdfReader(f)
-                total_pages = len(pdf_reader.pages)
+    svc = PDFCutterService()
+    result = svc.extract_unicode_text(
+        file_path,
+        page_range=page_range,
+        font_type=font_type if correct_encoding else "none",
+        post_process=correct_encoding,
+    )
 
-                # Parse page range if provided
-                start_page, end_page = 0, total_pages
-                if page_range:
-                    try:
-                        if "-" in page_range:
-                            parts = page_range.split("-")
-                            # 1-indexed to 0-indexed
-                            start_page = max(0, int(parts[0]) - 1)
-                            end_page = min(total_pages, int(parts[1]))
-                        else:
-                            start_page = max(0, int(page_range) - 1)
-                            end_page = min(total_pages, start_page + 1)
-                    except (ValueError, IndexError):
-                        start_page, end_page = 0, total_pages
-
-                # Extract text from the specified pages
-                extracted_text = ""
-                has_encoding_issues = False
-
-                for page_num in range(start_page, end_page):
-                    page_text = pdf_reader.pages[page_num].extract_text()
-                    if page_text:
-                        extracted_text += page_text + "\n\n"
-
-                # Check if there are Hindi encoding issues
-                service = PDFCutterService()
-                has_encoding_issues = service.detect_potential_hindi_encoding_issue(
-                    extracted_text
-                )
-
-                # Correct encoding if needed
-                if correct_encoding and has_encoding_issues:
-                    result = correct_hindi_text(extracted_text, font_type)
-                    corrected_text = result["corrected_text"]
-                    detected_font_type = result.get("detected_font_type", font_type)
-                else:
-                    corrected_text = extracted_text
-                    detected_font_type = None
-
-                return jsonify(
-                    {
-                        "success": True,
-                        "filename": filename,
-                        "total_pages": total_pages,
-                        "extracted_text": extracted_text,
-                        "has_encoding_issues": has_encoding_issues,
-                        "corrected_text": corrected_text if correct_encoding else None,
-                        "detected_font_type": detected_font_type,
-                    }
-                )
-
-        except Exception as e:
-            return jsonify(
-                {"success": False, "message": f"Error extracting text: {str(e)}"}
-            )
-
-    return jsonify({"success": False, "message": "Invalid file format"})
+    return jsonify(
+        {
+            "success": True,
+            "filename": filename,
+            **result,
+        }
+    )
 
 
 @app.route("/process_directory", methods=["POST"])
 def process_directory():
-    """Handle batch processing of a directory"""
     input_dir = request.form.get("input_dir")
-    output_dir = request.form.get("output_dir", "output")
+    output_dir = request.form.get("output_dir", OUTPUT_DIR)
     config_file = request.form.get("config_file")
 
     if not input_dir:
-        return jsonify({"success": False, "message": "Input directory is required"})
+        return jsonify({"success": False, "message": "input_dir is required"})
 
     input_dir = _safe_path(input_dir)
     output_dir = _safe_path(output_dir)
 
     if not os.path.isdir(input_dir):
-        return jsonify({"success": False, "message": "Input directory not found"})
-
+        return jsonify({"success": False, "message": "input_dir not found"})
     if not config_file:
-        return jsonify({"success": False, "message": "Config file is required"})
+        return jsonify({"success": False, "message": "config_file is required"})
 
     config_file = _safe_path(config_file)
     if not os.path.isfile(config_file):
-        return jsonify({"success": False, "message": "Config file not found"})
+        return jsonify({"success": False, "message": "config_file not found"})
 
-    # Process the directory
-    service = PDFCutterService()
-    config = service.load_config(config_file)
-
+    svc = PDFCutterService()
+    config = svc.load_config(config_file)
     try:
-        result = service.process_directory(input_dir, output_dir, config)
+        result = svc.process_directory(input_dir, output_dir, config)
         return jsonify(
             {
                 "success": True,
-                "message": f"Processed {result['processed_count']} files, skipped {result['skipped_count']} files",
+                "message": (
+                    f"Processed {result['processed_count']} files, "
+                    f"skipped {result['skipped_count']}"
+                ),
                 "result": result,
             }
         )
-    except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error processing directory: {str(e)}"}
-        )
+    except Exception as exc:
+        return jsonify({"success": False, "message": f"Error: {exc}"})
 
 
 @app.route("/save_config", methods=["POST"])
 def save_config():
-    """Save configuration file"""
-    config_data = request.json.get("config")
-    config_path = request.json.get("config_path", "config.json")
+    data = request.json or {}
+    config_data = data.get("config")
+    config_path = _safe_path(data.get("config_path", "config.json"))
 
     if not config_data:
-        return jsonify({"success": False, "message": "No configuration data provided"})
+        return jsonify({"success": False, "message": "No config data provided"})
 
-    config_path = _safe_path(config_path)
     try:
-        with open(config_path, "w") as f:
-            json.dump(config_data, f, indent=2)
-
-        return jsonify(
-            {"success": True, "message": f"Configuration saved to {config_path}"}
-        )
-    except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error saving configuration: {str(e)}"}
-        )
+        with open(config_path, "w", encoding="utf-8") as fh:
+            json.dump(config_data, fh, indent=2, ensure_ascii=False)
+        return jsonify({"success": True, "message": f"Saved to {config_path}"})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)})
 
 
 @app.route("/list_output_files")
 def list_output_files():
-    """List output files"""
-    output_dir = request.args.get("output_dir", "output")
+    # BUG FIX: output_dir was previously not passed through _safe_path,
+    # allowing path traversal (e.g. output_dir=../../etc).
+    raw_dir = request.args.get("output_dir", "output")
+    try:
+        output_dir = _safe_path(raw_dir)
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid output_dir"})
 
     if not os.path.isdir(output_dir):
         return jsonify(
-            {"success": False, "message": f"Output directory not found: {output_dir}"}
+            {"success": False, "message": f"Directory not found: {output_dir}"}
         )
 
     files = []
-    for file_path in glob.glob(os.path.join(output_dir, "*.pdf")):
-        file_name = os.path.basename(file_path)
-        file_size = os.path.getsize(file_path) / 1024  # Size in KB
+    for file_path in sorted(glob.glob(os.path.join(output_dir, "*.pdf"))):
         files.append(
-            {"name": file_name, "path": file_path, "size": round(file_size, 2)}
+            {
+                "name": os.path.basename(file_path),
+                "path": file_path,
+                "size_kb": round(os.path.getsize(file_path) / 1024, 2),
+                "modified": datetime.fromtimestamp(
+                    os.path.getmtime(file_path)
+                ).isoformat(),
+            }
         )
-
-    return jsonify({"success": True, "files": files})
+    return jsonify({"success": True, "files": files, "count": len(files)})
 
 
 @app.route("/download_file")
 def download_file():
-    """Download a file"""
-    file_path = request.args.get("file_path")
+    file_path = request.args.get("file_path", "")
     if not file_path:
-        return jsonify({"success": False, "message": "No file path provided"})
-
+        return jsonify({"success": False, "message": "file_path is required"})
     file_path = _safe_path(file_path)
     if not os.path.isfile(file_path):
         return jsonify({"success": False, "message": "File not found"})
-
     return send_file(file_path, as_attachment=True)
 
 
 @app.route("/delete_file", methods=["POST"])
 def delete_file():
-    """Delete a file"""
-    file_path = request.form.get("file_path")
+    file_path = request.form.get("file_path", "")
     if not file_path:
-        return jsonify({"success": False, "message": "No file path provided"})
-
+        return jsonify({"success": False, "message": "file_path is required"})
     file_path = _safe_path(file_path)
     if not os.path.isfile(file_path):
         return jsonify({"success": False, "message": "File not found"})
-
     try:
         os.remove(file_path)
         return jsonify(
-            {"success": True, "message": f"File deleted: {os.path.basename(file_path)}"}
+            {"success": True, "message": f"Deleted: {os.path.basename(file_path)}"}
         )
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Error deleting file: {str(e)}"})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)})
 
 
-# Register cleanup function to stop the service when the app exits
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+
+
+@atexit.register
 def cleanup():
     global SERVICE_PROCESS
     if SERVICE_PROCESS:
@@ -585,12 +471,6 @@ def cleanup():
         SERVICE_PROCESS = None
 
 
-atexit.register(cleanup)
-
-
 if __name__ == "__main__":
-    # Create templates directory if it doesn't exist
     os.makedirs("templates", exist_ok=True)
-
-    # Start the Flask app
     app.run(debug=True, port=5000)
