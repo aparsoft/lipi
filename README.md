@@ -1,156 +1,117 @@
-# PDF Cutter Service and App
+# PDF Cutter Service
 
-This is an enhanced version of the PDF cutter tool, with a service component that can run independently and web applications for a user-friendly interface.
+A Python tool to split PDF files into separate documents based on page ranges. Includes a background service with an HTTP API and a Flask web UI.
 
 ## Features
 
-- **PDF Cutter Service**: A background service that can:
-  - Split PDFs based on page ranges
-  - Watch directories for new PDFs to process automatically
-  - Provide an HTTP API for programmatic access
-  - Run independently via command line
+- **PDF Splitting** -- Split PDFs by page ranges with custom output naming
+- **Batch Processing** -- Process multiple PDFs at once using a JSON configuration file
+- **Directory Watcher** -- Automatically process new PDFs dropped into a watched folder
+- **HTTP API** -- Programmatic access via a lightweight REST API
+- **Flask Web UI** -- Browser-based interface for uploading, splitting, batch processing, and editing configs
+- **Hindi Text Encoding** -- Detects and attempts to fix Kruti Dev / Chanakya encoded Hindi text in PDFs
 
-- **Web Applications**: Choose between two user-friendly interfaces:
-  - **Flask App**: Compatible with NumPy 2.0 and newer Python versions
-  - **Streamlit App** (requires NumPy<2.0): Rich interactive interface
+## Requirements
 
-Both interfaces allow you to:
-  - Split individual PDFs with custom page ranges
-  - Batch process multiple PDFs with a configuration file
-  - Create and edit configuration files through a visual editor
-  - Manage and monitor the PDF Cutter Service
+- Python 3.9+
 
-## Installation
-
-### Prerequisites
-
-Make sure you have Python 3.7+ installed. Then install the required dependencies:
+### Install dependencies
 
 ```bash
-# For Flask app (compatible with NumPy 2.0)
-pip install flask PyPDF2 requests werkzeug watchdog
-
-# For Streamlit app (requires NumPy<2.0)
-pip install streamlit PyPDF2 watchdog tqdm
+pip install -r requirements.txt
 ```
 
-### Quick Start
+Core packages: `Flask`, `pypdf`, `requests`, `watchdog`, `tqdm`, `indic-transliteration`.
 
-1. Choose your preferred interface:
+## Quick Start
 
-   - **For Flask app** (recommended, works with NumPy 2.0):
-     ```
-     start_flask_app.bat
-     ```
+### 1. Start the Flask web app (recommended)
 
-   - **For Streamlit app** (requires NumPy<2.0):
-     ```
-     start_pdf_cutter.bat
-     ```
-
-2. Or start the components separately:
-   - Start the service:
-     ```
-     python pdf_cutter_service.py --output-dir ./output --port 8888
-     ```
-   - Start the Flask app:
-     ```
-     python flask_app.py
-     ```
-   - Start the Streamlit app (if NumPy<2.0):
-     ```
-     streamlit run streamlit_app.py
-     ```
-
-## Using the Flask App
-
-1. **Start the service** from the sidebar if it's not already running
-2. Choose one of the three sections:
-   - **Single PDF Splitter**: Upload or specify the path to a PDF and define page ranges
-   - **Batch Processing**: Process multiple PDFs using a configuration file
-   - **Configuration Editor**: Create or edit configuration files visually
-
-## Using the Service Directly (Command Line)
-
+```bash
+python flask_app.py
 ```
-# Run as a service watching a directory
+
+Open http://127.0.0.1:5000 in your browser. From the sidebar you can start the background PDF Cutter Service which provides the actual splitting backend on port 8111.
+
+### 2. Start the service standalone (CLI / API only)
+
+```bash
+# API-only mode
+python pdf_cutter_service.py --output-dir ./output --port 8111
+
+# Watch a directory for new PDFs + use a config file
 python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --config config.json
 
-# Run as a service with a specific port for API access
-python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --port 5000
-
-# Run as a service without watching a directory (API only)
-python pdf_cutter_service.py --output-dir ./output --port 8000
+# Combine both
+python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --config config.json --port 8111
 ```
 
-## Using the HTTP API
+### 3. Streamlit app (alternative UI)
 
-The service provides a simple HTTP API on port 8000 (or as configured):
-
-- `GET /status` - Get the current service status
-- `GET /help` - Get API help information
-- `POST /split` - Split a PDF file with parameters:
-  - `input_file`: Path to the input PDF
-  - `ranges`: Page ranges in format "1-10:Lecture1,11-20:Lecture2"
-  - `output_dir`: Output directory
-  - `prefix` (optional): Prefix for output filenames
-  - `unit_name` (optional): Unit name for output filenames
-
-Example:
-```
-curl -X POST "http://localhost:8000/split?input_file=example.pdf&ranges=1-5:Part1,6-10:Part2&output_dir=output"
+```bash
+streamlit run streamlit_app.py
 ```
 
-## Configuration File Format
+> **Note:** The Streamlit app still uses `PyPDF2`. It works but the Flask app is the recommended interface.
 
-The configuration file is in JSON format and defines how PDFs should be split:
+## Using the Flask Web UI
+
+1. **Start the service** from the sidebar (set output directory and port, then click *Start Service*).
+2. Navigate to one of:
+   - **Single PDF Splitter** -- Upload a PDF, define page ranges, split.
+   - **Batch Processing** -- Point at a directory of PDFs + a config JSON, process all at once.
+   - **Configuration Editor** -- Create / edit config files visually.
+
+## HTTP API
+
+Once the service is running (default port **8111**):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/status` | Service status (JSON) |
+| `GET`  | `/help`   | Help text |
+| `POST` | `/split`  | Split a PDF |
+| `POST` | `/correct_text` | Correct Hindi text encoding |
+
+### Split example
+
+```bash
+curl -X POST "http://localhost:8111/split?input_file=example.pdf&ranges=1-5:Part1,6-10:Part2&output_dir=output"
+```
+
+**Parameters:**
+- `input_file` (required) -- Path to the input PDF
+- `ranges` (required) -- Page ranges, e.g. `1-10:Intro,11-20:Chapter1`
+- `output_dir` -- Output directory (default: `output`)
+- `prefix` -- Filename prefix
+- `unit_name` -- Unit name for filenames
+- `fix_encoding` -- `true`/`false`, attempt Hindi encoding fix (default: `true`)
+
+## Configuration File
+
+The config file (`config.json`) maps PDF filenames (or patterns) to splitting rules:
 
 ```json
 {
   "default": {
     "page_ranges": [
-      {
-        "start": 1,
-        "end": 5,
-        "name": "Introduction"
-      },
-      {
-        "start": 6,
-        "end": 15,
-        "name": "MainContent"
-      }
+      { "start": 1, "end": 5, "name": "Introduction" },
+      { "start": 6, "end": 15, "name": "MainContent" }
     ],
     "unit_name": "DefaultUnit",
     "prefix": "NCERT"
   },
   "english_textbook": {
     "page_ranges": [
-      {
-        "start": 1,
-        "end": 10,
-        "name": "Chapter1"
-      },
-      {
-        "start": 11,
-        "end": 25,
-        "name": "Chapter2"
-      }
+      { "start": 1, "end": 10, "name": "Chapter1" },
+      { "start": 11, "end": 25, "name": "Chapter2" }
     ],
     "unit_name": "English",
     "prefix": "Class6"
   },
   "^chapter(\\d+)$": {
     "page_ranges": [
-      {
-        "start": 1,
-        "end": 5,
-        "name": "Introduction"
-      },
-      {
-        "start": 6,
-        "end": 15,
-        "name": "Content"
-      }
+      { "start": 1, "end": 5, "name": "Introduction" }
     ],
     "unit_name": "PatternMatched",
     "prefix": "NCERT"
@@ -158,30 +119,37 @@ The configuration file is in JSON format and defines how PDFs should be split:
 }
 ```
 
-- **default**: Applied when no specific pattern matches
-- **exact filenames**: (like "english_textbook") matches exact filename without extension
-- **regex patterns**: (starting with ^ and ending with $) matches filenames using regular expressions
+- **`default`** -- Applied when no specific match is found
+- **Exact name** (e.g. `english_textbook`) -- Matches the PDF filename (without `.pdf`)
+- **Regex pattern** (e.g. `^chapter(\d+)$`) -- Matches filenames via regex
 
 ## Output Naming
 
-The output files are named according to the pattern:
-`[prefix]_[unit_name]_[name].pdf`
+Files are named: `[prefix]_[unit_name]_[name].pdf`
 
-For example, with:
-- prefix = "Class6"
-- unit_name = "English"
-- name = "Chapter1"
+Example: prefix=`Class6`, unit_name=`English`, name=`Chapter1` → `Class6_English_Chapter1.pdf`
 
-The output file would be: `Class6_English_Chapter1.pdf`
+## Project Structure
+
+```
+flask_app.py             # Flask web application
+pdf_cutter_service.py    # Core service (splitting, API, watcher)
+streamlit_app.py         # Alternative Streamlit UI
+config.json              # Sample configuration file
+requirements.txt         # Python dependencies
+templates/               # Jinja2 HTML templates for Flask
+  layout.html            # Base layout with sidebar
+  index.html             # Home page
+  single_pdf.html        # Single PDF splitter page
+  batch_process.html     # Batch processing page
+  config_editor.html     # Config editor page
+output/                  # Default output directory
+temp/                    # Temporary upload directory
+```
 
 ## Troubleshooting
 
-### NumPy Version Issues
-
-If you encounter errors about NumPy version compatibility (such as errors with NumPy 2.0 and Streamlit), use the Flask app instead, which is compatible with newer NumPy versions.
-
-### General Issues
-
-1. Make sure all required directories exist (templates, output, temp)
-2. Check that the service is running before using the web interfaces
-3. For PDF processing errors, verify that the PDF file is valid and not password-protected
+- **Service not starting?** Make sure the port isn't already in use. Change it in the sidebar or via `--port`.
+- **PDF errors?** Verify the PDF isn't password-protected or corrupted.
+- **Missing directories?** The app auto-creates `output/` and `temp/` on startup.
+- **Streamlit issues?** Use the Flask app instead -- it has fewer dependencies and works with current Python/NumPy versions.
