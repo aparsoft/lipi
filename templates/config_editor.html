@@ -117,7 +117,7 @@
             <div class="col-md-6 pattern-name-container">
                 <div class="mb-2">
                     <label class="form-label">Pattern Name</label>
-                    <input type="text" class="form-control pattern-name" placeholder="e.g., english_textbook">
+                    <input type="text" class="form-control pattern-name" placeholder="e.g., ncert_hindi_class9">
                 </div>
             </div>
         </div>
@@ -126,7 +126,7 @@
             <div class="col-md-6">
                 <div class="mb-2">
                     <label class="form-label">Unit Name</label>
-                    <input type="text" class="form-control unit-name" placeholder="e.g., English">
+                    <input type="text" class="form-control unit-name" placeholder="e.g., Hindi">
                 </div>
             </div>
             <div class="col-md-6">
@@ -196,7 +196,8 @@
 <script>
     $(document).ready(function() {
         // Initialize configuration object
-        let configData = {{ config|tojson|safe if config else '{}' }};
+        let configData = {{ config | tojson | safe
+    }};
         
         // Update JSON preview
         function updateJsonPreview() {
@@ -382,11 +383,11 @@
             addPatternToUI('new_pattern', {
                 page_ranges: [{
                     start: 1,
-                    end: 10,
-                    name: 'Range1'
+                    end: 20,
+                    name: 'Chapter1'
                 }],
-                unit_name: '',
-                prefix: ''
+                unit_name: 'Hindi',
+                prefix: 'NCERT'
             });
             
             updateConfig();
@@ -397,10 +398,10 @@
             addPatternToUI('default', {
                 page_ranges: [{
                     start: 1,
-                    end: 10,
-                    name: 'Default'
+                    end: 50,
+                    name: 'Part1'
                 }],
-                unit_name: 'Default',
+                unit_name: 'Hindi',
                 prefix: 'NCERT'
             });
             
