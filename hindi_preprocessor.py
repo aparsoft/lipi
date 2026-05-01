@@ -140,6 +140,17 @@ _KRUTIDEV_TO_UNICODE: Dict[str, str] = {
     "=": "त्",
     "F": "थ्",
     "/": "द्",
+    # ── Walkman-Chanakya905 multi-char tokens ──────────────────────
+    # These font-specific trigraphs/digraphs appear when pypdf extracts
+    # text from PDFs that use Walkman-Chanakya905 (a Chanakya-variant
+    # font with KrutiDev-like keyboard layout).  The 'o' glyph in this
+    # font combines with following matra + Q to form क-based tokens,
+    # and 'iQ' forms फ (replacing standalone Q=फ for this font).
+    "oaQ": "कं",      # oaQputa?kk → कंचनजंघा (Kanchenjunga), oaQcy → कंचनगर
+    "oqQ": "कु",      # oqQN → कुछ (kuch)
+    "owQ": "कू",      # LowQy → स्कूल (school)
+    "oQ": "कु",       # eqloQjkus → मुस्कुराने (smile)
+    "iQ": "फ",        # fiQj → फिर (again), fiQYe → फिल्म (film)
     # ── Common high-frequency patterns ─────────────────────────────
     "osQ": "के",
     "kjk": "ारा",
@@ -175,6 +186,21 @@ _KRUTIDEV_TO_UNICODE: Dict[str, str] = {
     "&": "-",  # compound joiner
     "\xb5": " ",  # µ — clause separator
     "A": "।",  # danda (sentence terminator)
+    # ── Walkman-Chanakya905 single-char overrides ──────────────────
+    # Font-specific WinAnsi codepoints extracted by pypdf.
+    "\u00d8": "क्र",   # Ø — pØ → चक्र (chakra)
+    "\u00d1": "कृ",    # Ñ — izÑfr → प्रकृति (nature)
+    "\u00cd": "ऋ",     # Í — Íf"k → ऋषि (sage)
+    "\u00b6": "\u201c", # ¶ — opening dialog quote
+    "\u00af": "\u093f\u0902", # ¯ — िं (i-matra + anusvara), reordering handles placement
+    "\u00bc": "\u0926\u094d\u0927", # ¼ — द्ध (ddha conjunct for बौद्ध=Buddhist)
+    "\u00b1": "एं",    # ± — xb± → गएं (went)
+    "\u00b8": ",",     # ¸ — comma (sentence punctuation)
+    "\u00aa": "\u094d\u0930", # ª — र् (half-ra for conjuncts like ड्राइवर)
+    "\u00dd": "\u0941\u0915", # Ý — ुक (uk compound for रुकता=stopping)
+    "\u201dk": "ज",    # "k (right double quote + k) — ज (ja) in Walkman-Chanakya905
+    "\u201d": "ज",     # " (right double quote) — ज fallback
+    "\u00d9": "ट",     # Ù — replaces standalone Q/फ in certain contexts
 }
 
 
@@ -265,10 +291,25 @@ _CHANAKYA_KEYS: List[str] = sorted(_CHANAKYA_TO_UNICODE.keys(), key=len, reverse
 
 # Regex for i-matra reordering (compiled once)
 _IMATRA = "\u093f"  # ि
+_IMATRA_ANUSVARA = "\u093f\u0902"  # िं (i-matra + anusvara)
 _HALANT = "\u094d"  # ्
 _CONS_RANGE = "\u0915-\u0939"  # क–ह
-_IMATRA_REORDER_RE = re.compile(_IMATRA + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])")
-_IMATRA_REORDER_REPL = f"\\1{_IMATRA}"
+_IMATRA_REORDER_RE = re.compile(
+    _IMATRA_ANUSVARA + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
+    + "|" + _IMATRA + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
+)
+_IMATRA_REORDER_REPL = r"\1\2" + _IMATRA
+_IMATRA_ANUSVARA_REORDER_REPL = r"\1\2" + _IMATRA_ANUSVARA
+
+
+def _reorder_imatra(match: re.Match) -> str:
+    """Move ि or िं from before consonant cluster to after it."""
+    if match.group(1):
+        # िं + consonant(s) → consonant(s) + िं
+        return match.group(1) + _IMATRA_ANUSVARA
+    else:
+        # ि + consonant(s) → consonant(s) + ि
+        return match.group(2) + _IMATRA
 
 
 class HindiPreprocessor:
@@ -384,10 +425,10 @@ class HindiPreprocessor:
 
         converted = "".join(result)
 
-        # ── Pass 2: Reorder i-matra (ि) ────────────────────────────
+        # ── Pass 2: Reorder i-matra (ि and िं) ──────────────────────
         # Only needed for KrutiDev (Chanakya doesn't have this issue)
         if font_type == "krutidev":
-            converted = _IMATRA_REORDER_RE.sub(_IMATRA_REORDER_REPL, converted)
+            converted = _IMATRA_REORDER_RE.sub(_reorder_imatra, converted)
 
         return converted
 
@@ -417,6 +458,12 @@ class HindiPreprocessor:
             ("ोो", "ो"),
             ("ौौ", "ौ"),
             ("ंं", "ं"),
+            # ── Walkman-Chanakya905 artifacts ───────────────────────
+            # Font encodes एं as 'b±' giving इएं instead of एं
+            ("इएं", "एं"),
+            ("आइएं", "आएं"),
+            # Halant + aa-matra is invalid; the aa-matra wins
+            ("\u094d\u093e", "\u093e"),  # ् + ा → ा
             # ── Common word-level corrections ──────────────────────
             ("अौर", "और"),
             ("अार", "आर"),
