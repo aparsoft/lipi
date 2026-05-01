@@ -1,0 +1,18 @@
+# Core dependencies
+Flask>=3.0
+pypdf>=4.0
+requests>=2.28
+werkzeug>=3.0
+watchdog>=3.0
+tqdm>=4.60
+
+# Optional: Hindi text processing
+indic-transliteration>=2.3
+
+# Optional: Streamlit UI (alternative to Flask)
+# streamlit>=1.30
+
+tzdata==2025.2
+urllib3==2.4.0
+watchdog==6.0.0
+Werkzeug==3.1.3
