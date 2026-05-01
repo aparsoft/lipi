@@ -185,3 +185,4 @@ collection_info/
 *.zip
 output/
 instruct.md
+auto_commit.py
