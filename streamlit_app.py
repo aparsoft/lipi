@@ -28,18 +28,14 @@ DEFAULT_SERVICE_URL = "http://localhost:8111"
 SERVICE_PROCESS = None
 
 
-def start_service_process(
-    output_dir: str, config_file: Optional[str] = None, port: int = 8111
-):
+def start_service_process(output_dir: str, config_file: Optional[str] = None, port: int = 8111):
     """Start the PDF Cutter Service as a subprocess"""
     global SERVICE_PROCESS
 
     # Build the command
     cmd = [
         sys.executable,
-        os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "pdf_cutter_service.py"
-        ),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdf_cutter_service.py"),
         "--output-dir",
         output_dir,
         "--port",
@@ -147,9 +143,7 @@ def create_download_link(file_path: str, link_text: str = "Download file") -> st
         b64 = base64.b64encode(bytes_data).decode()
         filename = os.path.basename(file_path)
         mime_type = (
-            "application/pdf"
-            if file_path.lower().endswith(".pdf")
-            else "application/octet-stream"
+            "application/pdf" if file_path.lower().endswith(".pdf") else "application/octet-stream"
         )
         href = f'<a href="data:{mime_type};base64,{b64}" download="{filename}">{link_text}</a>'
         return href
@@ -179,17 +173,13 @@ with st.sidebar:
 
         # Service configuration
         st.subheader("Start Service")
-        output_dir = st.text_input(
-            "Output Directory", "output", key="service_output_dir"
-        )
+        output_dir = st.text_input("Output Directory", "output", key="service_output_dir")
 
         col1, col2 = st.columns(2)
         with col1:
             use_config = st.checkbox("Use Config File")
         with col2:
-            service_port = st.number_input(
-                "Port", value=8111, min_value=1024, max_value=65535
-            )
+            service_port = st.number_input("Port", value=8111, min_value=1024, max_value=65535)
 
         config_file = None
         if use_config:
@@ -227,9 +217,7 @@ if app_mode == "Single PDF Splitter":
         if uploaded_file:
             # Save the uploaded file to disk
             with st.spinner("Processing uploaded file..."):
-                temp_dir = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)), "temp"
-                )
+                temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
                 os.makedirs(temp_dir, exist_ok=True)
                 temp_file_path = os.path.join(temp_dir, uploaded_file.name)
 
@@ -258,10 +246,7 @@ if app_mode == "Single PDF Splitter":
                     )
 
                 if range_preset == "One range per page":
-                    ranges = [
-                        (i, i, f"Page{i}")
-                        for i in range(1, pdf_info["total_pages"] + 1)
-                    ]
+                    ranges = [(i, i, f"Page{i}") for i in range(1, pdf_info["total_pages"] + 1)]
                 elif range_preset == "Single range (all pages)":
                     ranges = [(1, pdf_info["total_pages"], "CompleteDocument")]
 
@@ -301,16 +286,12 @@ if app_mode == "Single PDF Splitter":
                                 key=f"end_{i}",
                             )
                         with cols[2]:
-                            name = st.text_input(
-                                "Name", value=range_item["name"], key=f"name_{i}"
-                            )
+                            name = st.text_input("Name", value=range_item["name"], key=f"name_{i}")
                         with cols[3]:
                             if st.button("Remove", key=f"remove_{i}"):
                                 continue
 
-                        updated_ranges.append(
-                            {"start": start, "end": end, "name": name}
-                        )
+                        updated_ranges.append({"start": start, "end": end, "name": name})
 
                     st.session_state.ranges = updated_ranges
 
@@ -337,15 +318,10 @@ if app_mode == "Single PDF Splitter":
                             )
                         st.rerun()
 
-                    ranges = [
-                        (r["start"], r["end"], r["name"])
-                        for r in st.session_state.ranges
-                    ]
+                    ranges = [(r["start"], r["end"], r["name"]) for r in st.session_state.ranges]
 
                 # Convert to string format for API
-                range_str = ",".join(
-                    [f"{start}-{end}:{name}" for start, end, name in ranges]
-                )
+                range_str = ",".join([f"{start}-{end}:{name}" for start, end, name in ranges])
 
                 # Output options
                 st.subheader("Output Options")
@@ -384,19 +360,13 @@ if app_mode == "Single PDF Splitter":
                                         st.write(file_name)
                                     with col2:
                                         st.markdown(
-                                            create_download_link(
-                                                output_file, "Download"
-                                            ),
+                                            create_download_link(output_file, "Download"),
                                             unsafe_allow_html=True,
                                         )
                             else:
-                                st.error(
-                                    f"Error: {result.get('message', 'Unknown error')}"
-                                )
+                                st.error(f"Error: {result.get('message', 'Unknown error')}")
                     else:
-                        st.error(
-                            "Service is not running. Please start the service first."
-                        )
+                        st.error("Service is not running. Please start the service first.")
     else:
         # Path input mode
         input_file = st.text_input("PDF File Path")
@@ -410,9 +380,7 @@ if app_mode == "Single PDF Splitter":
             st.write(f"Size: **{pdf_info['size_kb']} KB**")
 
             # Page range input
-            range_str = st.text_input(
-                "Page Ranges (e.g., '1-5:Chapter1,6-10:Chapter2')"
-            )
+            range_str = st.text_input("Page Ranges (e.g., '1-5:Chapter1,6-10:Chapter2')")
 
             # Output options
             st.subheader("Output Options")
@@ -516,9 +484,7 @@ elif app_mode == "Batch Processing":
                     try:
                         if use_config:
                             # Process based on configuration
-                            result = service.process_directory(
-                                input_dir, output_dir, config
-                            )
+                            result = service.process_directory(input_dir, output_dir, config)
                             results.append(
                                 {
                                     "file": file_name,
@@ -529,24 +495,18 @@ elif app_mode == "Batch Processing":
                         else:
                             # Use default ranges
                             range_str = "1-9999:Complete"  # Process all pages
-                            result = split_pdf_through_api(
-                                pdf_file, range_str, output_dir
-                            )
+                            result = split_pdf_through_api(pdf_file, range_str, output_dir)
                             results.append(
                                 {
                                     "file": file_name,
                                     "status": (
-                                        "success"
-                                        if result.get("status") == "success"
-                                        else "error"
+                                        "success" if result.get("status") == "success" else "error"
                                     ),
                                     "output_files": len(result.get("output_files", [])),
                                 }
                             )
                     except Exception as e:
-                        results.append(
-                            {"file": file_name, "status": "error", "error": str(e)}
-                        )
+                        results.append({"file": file_name, "status": "error", "error": str(e)})
 
                     # Update progress
                     progress_bar.progress((i + 1) / len(pdf_files))
@@ -623,9 +583,7 @@ elif app_mode == "Configuration Editor":
         if st.button("Add Pattern"):
             if new_pattern:
                 # Add the pattern with empty page ranges
-                if new_pattern_type == "Regex Pattern" and not new_pattern.startswith(
-                    "^"
-                ):
+                if new_pattern_type == "Regex Pattern" and not new_pattern.startswith("^"):
                     new_pattern = "^" + new_pattern + "$"
 
                 st.session_state.config[new_pattern] = {
@@ -655,9 +613,7 @@ elif app_mode == "Configuration Editor":
                 )
                 pattern_config["prefix"] = prefix
             with col3:
-                if pattern != "default" and st.button(
-                    "Delete Pattern", key=f"delete_{pattern}"
-                ):
+                if pattern != "default" and st.button("Delete Pattern", key=f"delete_{pattern}"):
                     del st.session_state.config[pattern]
                     st.warning(f"Deleted pattern: {pattern}")
                     st.rerun()
@@ -744,7 +700,7 @@ elif app_mode == "Configuration Editor":
 
 # Footer
 st.markdown("---")
-st.caption("PDF Cutter Tool - Created for NCERT PDF processing")
+st.caption("PDF Cutter Tool")
 
 
 # Cleanup on app exit
