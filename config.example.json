@@ -1,0 +1,16 @@
+{
+  "ncert_hindi_class9": {
+    "page_ranges": [
+      { "start": 1,  "end": 20, "name": "Chapter1" },
+      { "start": 21, "end": 45, "name": "Chapter2" },
+      { "start": 46, "end": 70, "name": "Chapter3" }
+    ],
+    "prefix": "NCERT",
+    "unit_name": "Hindi9"
+  },
+  "default": {
+    "page_ranges": [
+      { "start": 1, "end": 50, "name": "Part1" }
+    ]
+  }
+}
