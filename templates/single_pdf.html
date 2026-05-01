@@ -3,14 +3,15 @@
 {% block content %}
 <div class="card">
     <div class="card-header bg-primary text-white">
-        <h2 class="mb-0">Single PDF Splitter</h2>
+        <h2 class="mb-0">Single PDF Processor</h2>
     </div>
     <div class="card-body">
         {% if not status.running %}
-        <div class="alert alert-warning">
-            <i class="fas fa-exclamation-triangle"></i> The PDF Cutter Service is not running. Please start the service from the sidebar to use this tool.
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> The PDF Cutter Service is not running. You can still upload PDFs and extract Hindi text below. Start the service from the sidebar for PDF splitting.
         </div>
-        {% else %}
+        {% endif %}
+
         <div class="row">
             <div class="col-md-12">
                 <!-- PDF Upload/Select -->
@@ -27,7 +28,7 @@
                                 <button class="nav-link" id="path-tab" data-bs-toggle="tab" data-bs-target="#path-content" type="button" role="tab">File Path</button>
                             </li>
                         </ul>
-                        
+
                         <div class="tab-content pt-3" id="pdfSelectTabContent">
                             <!-- Upload Tab -->
                             <div class="tab-pane fade show active" id="upload-content" role="tabpanel">
@@ -39,7 +40,7 @@
                                     <button type="submit" class="btn btn-primary">Upload</button>
                                 </form>
                             </div>
-                            
+
                             <!-- Path Tab -->
                             <div class="tab-pane fade" id="path-content" role="tabpanel">
                                 <div class="mb-3">
@@ -51,8 +52,8 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- PDF Info and Ranges (hidden initially) -->
+
+                <!-- PDF Info (hidden initially) -->
                 <div id="pdf-info-section" style="display: none;">
                     <div class="card mb-4">
                         <div class="card-header">
@@ -74,6 +75,14 @@
                                                     <td id="pdf-size"></td>
                                                 </tr>
                                                 <tr>
+                                                    <th>Encoding</th>
+                                                    <td id="pdf-encoding"></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Detected Font</th>
+                                                    <td id="pdf-font-type"></td>
+                                                </tr>
+                                                <tr>
                                                     <th>Path</th>
                                                     <td id="pdf-path" style="word-break: break-all;"></td>
                                                 </tr>
@@ -87,10 +96,63 @@
                             </div>
                         </div>
                     </div>
-                    
+
+                    <!-- Hindi Text Extraction Section -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="fas fa-language"></i> Hindi Text Extractor (KrutiDev / Chanakya to Unicode)</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">Extract and convert text from legacy Hindi font PDFs to Unicode Devanagari. Works without the service running.</p>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="extract-page-range" class="form-label">Page Range (optional)</label>
+                                    <input type="text" class="form-control" id="extract-page-range" placeholder="e.g., 1-5 (leave empty for all)">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="extract-font-type" class="form-label">Font Type</label>
+                                    <select id="extract-font-type" class="form-select">
+                                        <option value="auto">Auto-detect</option>
+                                        <option value="krutidev">KrutiDev</option>
+                                        <option value="chanakya">Chanakya</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button id="extract-text-btn" class="btn btn-info form-control text-white">
+                                        <i class="fas fa-file-export"></i> Extract Unicode Text
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="extraction-result" style="display: none;">
+                                <div class="mb-2">
+                                    <span id="extraction-status" class="badge"></span>
+                                    <span id="extraction-font" class="badge bg-secondary ms-1"></span>
+                                </div>
+                                <div class="mb-2">
+                                    <button class="btn btn-sm btn-outline-secondary" id="toggle-raw-text">
+                                        <i class="fas fa-eye"></i> Show Raw (Before Conversion)
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success" id="copy-unicode-text">
+                                        <i class="fas fa-copy"></i> Copy Unicode Text
+                                    </button>
+                                </div>
+                                <label class="form-label"><strong>Raw Extracted Text</strong></label>
+                                <pre id="raw-text-preview" class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; display: none; white-space: pre-wrap; word-wrap: break-word;"></pre>
+
+                                <label class="form-label"><strong>Unicode Converted Text</strong></label>
+                                <pre id="unicode-text-preview" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PDF Splitting Section (requires service) -->
+                    {% if status.running %}
                     <div class="card mb-4">
                         <div class="card-header">
-                            <h5 class="mb-0">Step 3: Define Page Ranges</h5>
+                            <h5 class="mb-0">Step 3: Define Page Ranges for Splitting</h5>
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
@@ -101,26 +163,26 @@
                                     <option value="per-page">One Range Per Page</option>
                                 </select>
                             </div>
-                            
+
                             <div id="custom-ranges-section">
                                 <div id="ranges-container">
                                     <!-- Range items will be added here -->
                                 </div>
-                                
+
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-3">
                                     <button id="add-range-btn" class="btn btn-outline-primary">
                                         <i class="fas fa-plus"></i> Add Range
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <div id="page-ranges-display" class="mt-3">
                                 <label class="form-label">Final Ranges String:</label>
                                 <input type="text" id="ranges-string" class="form-control" readonly>
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="card mb-4">
                         <div class="card-header">
                             <h5 class="mb-0">Step 4: Output Options</h5>
@@ -130,12 +192,12 @@
                                 <label for="output_dir" class="form-label">Output Directory</label>
                                 <input type="text" class="form-control" id="output_dir" value="output">
                             </div>
-                            
+
                             <div class="mb-3 form-check">
                                 <input type="checkbox" class="form-check-input" id="use_prefix">
                                 <label class="form-check-label" for="use_prefix">Use Prefix and Unit Name</label>
                             </div>
-                            
+
                             <div id="prefix-options" style="display: none;">
                                 <div class="row">
                                     <div class="col-md-6">
@@ -147,19 +209,24 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="unit_name" class="form-label">Unit Name</label>
-                                            <input type="text" class="form-control" id="unit_name" value="English">
+                                            <input type="text" class="form-control" id="unit_name" value="Hindi">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-3">
                                 <button id="split-pdf-btn" class="btn btn-primary">Split PDF</button>
                             </div>
                         </div>
                     </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <i class="fas fa-scissors"></i> <strong>PDF Splitting</strong> requires the service to be running. Start it from the sidebar to enable splitting.
+                    </div>
+                    {% endif %}
                 </div>
-                
+
                 <!-- Results Section (hidden initially) -->
                 <div id="results-section" style="display: none;">
                     <div class="card">
@@ -175,7 +242,6 @@
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 
@@ -199,7 +265,7 @@
                 <div class="col-md-4">
                     <div class="mb-2">
                         <label class="form-label">Name</label>
-                        <input type="text" class="form-control range-name" value="Range1">
+                        <input type="text" class="form-control range-name" value="Chapter1">
                     </div>
                 </div>
                 <div class="col-md-2">
@@ -221,18 +287,18 @@
     $(document).ready(function() {
         let pdfInfo = null;
         let rangeCounter = 1;
-        
+
         // PDF Upload Form
         $('#pdf-upload-form').submit(function(e) {
             e.preventDefault();
-            
+
             if (!$('#pdf_file').val()) {
                 showAlert('warning', 'Please select a PDF file');
                 return;
             }
-            
+
             const formData = new FormData(this);
-            
+
             $.ajax({
                 url: '/upload_pdf',
                 type: 'POST',
@@ -255,16 +321,16 @@
                 }
             });
         });
-        
+
         // Load PDF by path
         $('#load-pdf-btn').click(function() {
             const pdfPath = $('#pdf_path').val();
-            
+
             if (!pdfPath) {
                 showAlert('warning', 'Please enter a PDF file path');
                 return;
             }
-            
+
             $.ajax({
                 url: '/upload_pdf',
                 type: 'POST',
@@ -290,62 +356,65 @@
                 }
             });
         });
-        
+
         // Display PDF Info
         function displayPdfInfo(info, path) {
             $('#pdf-filename').text(info.filename);
             $('#pdf-pages').text(info.total_pages);
             $('#pdf-size').text(info.size_kb + ' KB');
             $('#pdf-path').text(path);
-            
+
+            // Show encoding info
+            if (info.has_encoding_issues) {
+                $('#pdf-encoding').html('<span class="badge bg-warning text-dark">Legacy encoding detected</span>');
+                $('#pdf-font-type').html('<span class="badge bg-info">' + (info.detected_font_type || 'unknown') + '</span>');
+            } else {
+                $('#pdf-encoding').html('<span class="badge bg-success">No issues</span>');
+                $('#pdf-font-type').text('N/A');
+            }
+
             // Show PDF info section
             $('#pdf-info-section').show();
-            
-            // Initialize with one range
-            $('#ranges-container').empty();
-            addRange(1, info.total_pages, 'CompleteDocument');
-            updateRangesString();
-            
-            // Reset range counter
-            rangeCounter = 2;
+
+            // Initialize with one range (if splitting section exists)
+            if ($('#ranges-container').length) {
+                $('#ranges-container').empty();
+                addRange(1, info.total_pages, 'CompleteDocument');
+                updateRangesString();
+                rangeCounter = 2;
+            }
+
+            // Reset extraction section
+            $('#extraction-result').hide();
         }
-        
+
         // Range Type Change
         $('#range-type').change(function() {
             const type = $(this).val();
             const totalPages = pdfInfo ? pdfInfo.total_pages : 1;
-            
+
             // Clear existing ranges
             $('#ranges-container').empty();
-            
+
             if (type === 'custom') {
-                // Show custom ranges section
                 $('#custom-ranges-section').show();
-                
-                // Add one default range
                 addRange(1, totalPages, 'CompleteDocument');
                 rangeCounter = 2;
-            } 
+            }
             else if (type === 'single') {
-                // Hide custom ranges section
                 $('#custom-ranges-section').hide();
-                
-                // Create a single range for all pages
                 addRange(1, totalPages, 'CompleteDocument', false);
             }
             else if (type === 'per-page') {
-                // Hide custom ranges section
                 $('#custom-ranges-section').hide();
-                
-                // Create one range per page
                 for (let i = 1; i <= totalPages; i++) {
                     addRange(i, i, `Page${i}`, false);
                 }
             }
-            
+
             updateRangesString();
         });
-        
+
         // Use Prefix Toggle
         $('#use_prefix').change(function() {
             if (this.checked) {
@@ -354,86 +423,76 @@
                 $('#prefix-options').hide();
             }
         });
-        
+
         // Add Range Button
         $('#add-range-btn').click(function() {
             const totalPages = pdfInfo ? pdfInfo.total_pages : 1;
             const rangeItems = $('.range-item');
-            
+
             let startPage = 1;
             if (rangeItems.length > 0) {
                 const lastEndPage = parseInt($(rangeItems[rangeItems.length - 1]).find('.end-page').val());
                 startPage = Math.min(lastEndPage + 1, totalPages);
             }
-            
-            addRange(startPage, totalPages, `Range${rangeCounter}`);
+
+            addRange(startPage, totalPages, `Chapter${rangeCounter}`);
             rangeCounter++;
-            
+
             updateRangesString();
         });
-        
+
         // Add a range to the container
         function addRange(start, end, name, appendListeners = true) {
             const template = document.getElementById('range-template');
+            if (!template) return;
             const clone = document.importNode(template.content, true);
-            
-            // Set values
+
             $(clone).find('.start-page').val(start);
             $(clone).find('.end-page').val(end);
             $(clone).find('.range-name').val(name);
-            
-            // Append to container
+
             $('#ranges-container').append(clone);
-            
+
             if (appendListeners) {
-                // Add event listeners to the new range
                 const newRange = $('#ranges-container .range-item:last-child');
-                
-                // Remove button
                 newRange.find('.remove-range-btn').click(function() {
                     $(this).closest('.range-item').remove();
                     updateRangesString();
                 });
-                
-                // Update ranges string when inputs change
                 newRange.find('input').change(updateRangesString);
             }
         }
-        
+
         // Update ranges string
         function updateRangesString() {
             const ranges = [];
-            
             $('.range-item').each(function() {
                 const start = $(this).find('.start-page').val();
                 const end = $(this).find('.end-page').val();
                 const name = $(this).find('.range-name').val();
-                
                 ranges.push(`${start}-${end}:${name}`);
             });
-            
             $('#ranges-string').val(ranges.join(','));
         }
-        
+
         // Split PDF Button
         $('#split-pdf-btn').click(function() {
             if (!pdfInfo) {
                 showAlert('warning', 'Please select a PDF file first');
                 return;
             }
-            
+
             const inputFile = $('#pdf-path').text();
             const ranges = $('#ranges-string').val();
             const outputDir = $('#output_dir').val();
             const prefix = $('#use_prefix').is(':checked') ? $('#prefix').val() : '';
             const unitName = $('#use_prefix').is(':checked') ? $('#unit_name').val() : '';
-            
+
             if (!ranges) {
                 showAlert('warning', 'Please define at least one page range');
                 return;
             }
-            
-            // Split the PDF
+
             $.ajax({
                 url: '/split_pdf',
                 type: 'POST',
@@ -452,7 +511,7 @@
                 success: function(response) {
                     $('#split-pdf-btn').prop('disabled', false);
                     $('#split-pdf-btn').html('Split PDF');
-                    
+
                     if (response.success) {
                         showAlert('success', response.message);
                         displayResults(response.result);
@@ -467,23 +526,23 @@
                 }
             });
         });
-        
+
         // Display Results
         function displayResults(result) {
             $('#results-section').show();
-            
+
             const container = $('#output-files-container');
             container.empty();
-            
+
             if (result.output_files && result.output_files.length > 0) {
                 const table = $('<table class="table table-bordered"></table>');
                 const thead = $('<thead><tr><th>File</th><th width="100">Actions</th></tr></thead>');
                 const tbody = $('<tbody></tbody>');
-                
+
                 result.output_files.forEach(function(file) {
                     const filename = file.split(/[\\/]/).pop();
                     const tr = $('<tr></tr>');
-                    
+
                     tr.append(`<td>${filename}</td>`);
                     tr.append(`<td>
                         <a href="/download_file?file_path=${encodeURIComponent(file)}" class="btn btn-sm btn-primary me-1" title="Download">
@@ -493,17 +552,16 @@
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>`);
-                    
+
                     tbody.append(tr);
                 });
-                
+
                 table.append(thead).append(tbody);
                 container.append(table);
-                
-                // Add delete button handlers
+
                 $('.delete-file-btn').click(function() {
                     const filePath = decodeURIComponent($(this).data('file'));
-                    
+
                     $.ajax({
                         url: '/delete_file',
                         type: 'POST',
@@ -511,7 +569,6 @@
                         success: function(response) {
                             if (response.success) {
                                 showAlert('success', response.message);
-                                // Remove the row
                                 $(this).closest('tr').remove();
                             } else {
                                 showAlert('danger', response.message);
@@ -526,9 +583,116 @@
                 container.html('<div class="alert alert-info">No output files were created.</div>');
             }
         }
-        
+
         // Add event delegation for input changes
         $(document).on('change', '.range-item input', updateRangesString);
+
+        // ----------------------------------------------------------
+        // Hindi Text Extraction
+        // ----------------------------------------------------------
+        let extractedRawText = '';
+        let extractedUnicodeText = '';
+
+        $('#extract-text-btn').click(function() {
+            if (!pdfInfo) {
+                showAlert('warning', 'Please upload a PDF first');
+                return;
+            }
+
+            const pageRange = $('#extract-page-range').val().trim();
+            const fontType = $('#extract-font-type').val();
+            const formData = new FormData();
+            const fileInput = document.getElementById('pdf_file');
+
+            if (fileInput.files.length > 0) {
+                formData.append('pdf_file', fileInput.files[0]);
+            } else {
+                showAlert('warning', 'Please upload a PDF file using the upload tab above');
+                return;
+            }
+
+            formData.append('correct_encoding', 'true');
+            formData.append('font_type', fontType);
+            if (pageRange) {
+                formData.append('page_range', pageRange);
+            }
+
+            $.ajax({
+                url: '/extract_pdf_text',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                beforeSend: function() {
+                    $('#extract-text-btn').prop('disabled', true);
+                    $('#extract-text-btn').html('<span class="spinner-border spinner-border-sm"></span> Extracting...');
+                },
+                success: function(response) {
+                    $('#extract-text-btn').prop('disabled', false);
+                    $('#extract-text-btn').html('<i class="fas fa-file-export"></i> Extract Unicode Text');
+
+                    if (response.success) {
+                        extractedRawText = response.extracted_text || '';
+                        extractedUnicodeText = response.corrected_text || response.extracted_text || '';
+
+                        $('#extraction-result').show();
+
+                        if (response.has_encoding_issues) {
+                            $('#extraction-status').attr('class', 'badge bg-warning text-dark').text('Legacy encoding detected');
+                        } else {
+                            $('#extraction-status').attr('class', 'badge bg-success').text('Unicode / No issues');
+                        }
+
+                        const font = response.detected_font_type || 'unknown';
+                        $('#extraction-font').text(font === 'unknown' ? 'No legacy font' : font.charAt(0).toUpperCase() + font.slice(1));
+
+                        $('#raw-text-preview').text(extractedRawText);
+                        $('#unicode-text-preview').text(extractedUnicodeText || extractedRawText);
+
+                        showAlert('success', 'Text extracted from ' + response.total_pages + ' page(s)');
+                    } else {
+                        showAlert('danger', response.message || 'Extraction failed');
+                    }
+                },
+                error: function() {
+                    $('#extract-text-btn').prop('disabled', false);
+                    $('#extract-text-btn').html('<i class="fas fa-file-export"></i> Extract Unicode Text');
+                    showAlert('danger', 'Error extracting text from PDF');
+                }
+            });
+        });
+
+        // Toggle raw text visibility
+        $('#toggle-raw-text').click(function() {
+            const el = $('#raw-text-preview');
+            if (el.is(':visible')) {
+                el.slideUp();
+                $(this).html('<i class="fas fa-eye"></i> Show Raw (Before Conversion)');
+            } else {
+                el.slideDown();
+                $(this).html('<i class="fas fa-eye-slash"></i> Hide Raw Text');
+            }
+        });
+
+        // Copy unicode text to clipboard
+        $('#copy-unicode-text').click(function() {
+            const text = extractedUnicodeText || $('#unicode-text-preview').text();
+            if (!text) {
+                showAlert('warning', 'No text to copy');
+                return;
+            }
+            navigator.clipboard.writeText(text).then(function() {
+                showAlert('success', 'Unicode text copied to clipboard');
+            }).catch(function() {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showAlert('success', 'Unicode text copied to clipboard');
+            });
+        });
     });
 </script>
 {% endblock %}
