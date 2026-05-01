@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "aparsoft-pdf-tools"
+version = "1.2.0"
+description = "PDF splitting and legacy Hindi font (KrutiDev/Chanakya) text extraction toolkit"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Aparsoft Private Limited", email = "hello@aparsoft.in" },
+]
+keywords = [
+  "pdf",
+  "split",
+  "hindi",
+  "krutidev",
+  "chanakya",
+  "devanagari",
+  "unicode",
+  "ncert",
+  "edtech",
+  "indic",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Text Processing",
+  "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+  "Natural Language :: Hindi",
+]
+requires-python = ">=3.9"
+
+dependencies = [
+  "pypdf>=4.0.0",
+  "watchdog>=3.0.0",
+  "tqdm>=4.60.0",
+]
+
+[project.optional-dependencies]
+flask = [
+  "flask>=3.0.0",
+  "requests>=2.31.0",
+  "werkzeug>=3.0.0",
+]
+indic = [
+  "indic-transliteration>=2.3.0",
+]
+all = [
+  "flask>=3.0.0",
+  "requests>=2.31.0",
+  "werkzeug>=3.0.0",
+  "indic-transliteration>=2.3.0",
+  "fonttools>=4.40.0",
+]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "black>=24.0",
+  "ruff>=0.4.0",
+]
+
+[project.scripts]
+aparsoft-pdf = "pdf_cutter_service:main"
+
+[project.urls]
+Homepage = "https://aparsoft.in"
+Repository = "https://github.com/aparsoft/aparsoft-pdf-tools"
+"Bug Tracker" = "https://github.com/aparsoft/aparsoft-pdf-tools/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pdf_cutter_service*", "flask_app*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=pdf_cutter_service --cov-report=term-missing"
