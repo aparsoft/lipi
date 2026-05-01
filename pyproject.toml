@@ -1,11 +1,11 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "aparsoft-pdf-tools"
-version = "1.2.0"
-description = "PDF splitting and legacy Hindi font (KrutiDev/Chanakya) text extraction toolkit"
+name = "lipi"
+version = "1.0.0"
+description = "Legacy Hindi font (KrutiDev/Chanakya) to Unicode Devanagari toolkit with PDF splitting"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -40,25 +40,18 @@ requires-python = ">=3.9"
 
 dependencies = [
   "pypdf>=4.0.0",
-  "watchdog>=3.0.0",
-  "tqdm>=4.60.0",
 ]
 
 [project.optional-dependencies]
+fitz = [
+  "PyMuPDF>=1.24.0",
+]
 flask = [
-  "flask>=3.0.0",
+  "Flask>=3.0.0",
+  "watchdog>=3.0.0",
+  "tqdm>=4.60.0",
   "requests>=2.31.0",
   "werkzeug>=3.0.0",
-]
-indic = [
-  "indic-transliteration>=2.3.0",
-]
-all = [
-  "flask>=3.0.0",
-  "requests>=2.31.0",
-  "werkzeug>=3.0.0",
-  "indic-transliteration>=2.3.0",
-  "fonttools>=4.40.0",
 ]
 dev = [
   "pytest>=7.0",
@@ -68,16 +61,15 @@ dev = [
 ]
 
 [project.scripts]
-aparsoft-pdf = "pdf_cutter_service:main"
+lipi = "lipi.cli:main"
 
 [project.urls]
 Homepage = "https://aparsoft.in"
-Repository = "https://github.com/aparsoft/aparsoft-pdf-tools"
-"Bug Tracker" = "https://github.com/aparsoft/aparsoft-pdf-tools/issues"
+Repository = "https://github.com/aparsoft/lipi"
+"Bug Tracker" = "https://github.com/aparsoft/lipi/issues"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["pdf_cutter_service*", "flask_app*"]
+where = ["src"]
 
 [tool.black]
 line-length = 100
@@ -89,4 +81,3 @@ select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=pdf_cutter_service --cov-report=term-missing"
