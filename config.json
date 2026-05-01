@@ -18,7 +18,7 @@
       }
     ],
     "unit_name": "DefaultUnit",
-    "prefix": "NCERT"
+    "prefix": "SubjectName"
   },
   "english_textbook": {
     "page_ranges": [
@@ -55,6 +55,6 @@
       }
     ],
     "unit_name": "PatternMatched",
-    "prefix": "NCERT"
+    "prefix": "SubjectName"
   }
 }
