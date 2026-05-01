@@ -193,11 +193,11 @@
 {% endblock %}
 
 {% block scripts %}
+<script id="initial-config" type="application/json">{{ config | tojson | safe }}</script>
 <script>
     $(document).ready(function() {
-        // Initialize configuration object
-        let configData = {{ config | tojson | safe
-    }};
+        // Initialize configuration object from server-rendered JSON
+        let configData = JSON.parse(document.getElementById('initial-config').textContent);
         
         // Update JSON preview
         function updateJsonPreview() {
