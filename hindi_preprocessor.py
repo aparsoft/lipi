@@ -146,11 +146,13 @@ _KRUTIDEV_TO_UNICODE: Dict[str, str] = {
     # font with KrutiDev-like keyboard layout).  The 'o' glyph in this
     # font combines with following matra + Q to form क-based tokens,
     # and 'iQ' forms फ (replacing standalone Q=फ for this font).
-    "oaQ": "कं",      # oaQputa?kk → कंचनजंघा (Kanchenjunga), oaQcy → कंचनगर
-    "oqQ": "कु",      # oqQN → कुछ (kuch)
-    "owQ": "कू",      # LowQy → स्कूल (school)
-    "oQ": "कु",       # eqloQjkus → मुस्कुराने (smile)
-    "iQ": "फ",        # fiQj → फिर (again), fiQYe → फिल्म (film)
+    "oaQ": "कं",  # oaQputa?kk → कंचनजंघा (Kanchenjunga), oaQcy → कंचनगर
+    "oqQ": "कु",  # oqQN → कुछ (kuch)
+    "owQ": "कू",  # LowQy → स्कूल (school)
+    "oQ": "कु",  # eqloQjkus → मुस्कुराने (smile)
+    "iQ": "फ",  # fiQj → फिर (again), fiQYe → फिल्म (film)
+    "iwQ": "फू",  # iwQy → फूल (flower), iwQys → फूलों
+    "m¡Q": "ऊँ",  # m¡QpkbZ → ऊँचाई (height)
     # ── Common high-frequency patterns ─────────────────────────────
     "osQ": "के",
     "kjk": "ारा",
@@ -188,19 +190,21 @@ _KRUTIDEV_TO_UNICODE: Dict[str, str] = {
     "A": "।",  # danda (sentence terminator)
     # ── Walkman-Chanakya905 single-char overrides ──────────────────
     # Font-specific WinAnsi codepoints extracted by pypdf.
-    "\u00d8": "क्र",   # Ø — pØ → चक्र (chakra)
-    "\u00d1": "कृ",    # Ñ — izÑfr → प्रकृति (nature)
-    "\u00cd": "ऋ",     # Í — Íf"k → ऋषि (sage)
-    "\u00b6": "\u201c", # ¶ — opening dialog quote
-    "\u00af": "\u093f\u0902", # ¯ — िं (i-matra + anusvara), reordering handles placement
-    "\u00bc": "\u0926\u094d\u0927", # ¼ — द्ध (ddha conjunct for बौद्ध=Buddhist)
-    "\u00b1": "एं",    # ± — xb± → गएं (went)
-    "\u00b8": ",",     # ¸ — comma (sentence punctuation)
-    "\u00aa": "\u094d\u0930", # ª — र् (half-ra for conjuncts like ड्राइवर)
-    "\u00dd": "\u0941\u0915", # Ý — ुक (uk compound for रुकता=stopping)
-    "\u201dk": "ज",    # "k (right double quote + k) — ज (ja) in Walkman-Chanakya905
-    "\u201d": "ज",     # " (right double quote) — ज fallback
-    "\u00d9": "ट",     # Ù — replaces standalone Q/फ in certain contexts
+    "\u00d8": "क्र",  # Ø — pØ → चक्र (chakra)
+    "\u00d1": "कृ",  # Ñ — izÑfr → प्रकृति (nature)
+    "\u00cd": "ऋ",  # Í — Íf"k → ऋषि (sage)
+    "\u00b6": "\u201c",  # ¶ — opening dialog quote
+    "\u00af": "\u093f\u0902",  # ¯ — िं (i-matra + anusvara), reordering handles placement
+    "\u00bc": "\u0926\u094d\u0927",  # ¼ — द्ध (ddha conjunct for बौद्ध=Buddhist)
+    "\u00b1": "एं",  # ± — xb± → गएं (went)
+    "\u00b8": ",",  # ¸ — comma (sentence punctuation)
+    "\u00aa": "\u094d\u0930",  # ª — र् (half-ra for conjuncts like ड्राइवर)
+    "\u00dd": "\u0941\u0915",  # Ý — ुक (uk compound for रुकता=stopping)
+    "\u201dk": "ज",  # "k (right double quote + k) — ज (ja) in Walkman-Chanakya905
+    "\u201d": "ज",  # " (right double quote) — ज fallback
+    "\u00d9": "ट",  # Ù — replaces standalone Q/फ in certain contexts
+    "\u00e3": "ं",  # ã — anusvara (appears in ब्रांड)
+    "\u00ed": "ख",  # í — ख (appears in शिखर context)
 }
 
 
@@ -295,8 +299,11 @@ _IMATRA_ANUSVARA = "\u093f\u0902"  # िं (i-matra + anusvara)
 _HALANT = "\u094d"  # ्
 _CONS_RANGE = "\u0915-\u0939"  # क–ह
 _IMATRA_REORDER_RE = re.compile(
-    _IMATRA_ANUSVARA + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
-    + "|" + _IMATRA + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
+    _IMATRA_ANUSVARA
+    + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
+    + "|"
+    + _IMATRA
+    + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
 )
 _IMATRA_REORDER_REPL = r"\1\2" + _IMATRA
 _IMATRA_ANUSVARA_REORDER_REPL = r"\1\2" + _IMATRA_ANUSVARA
