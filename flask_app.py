@@ -339,6 +339,8 @@ def extract_pdf_text():
         {
             "success": True,
             "filename": filename,
+            "extracted_text": result.get("full_text", ""),
+            "corrected_text": result.get("full_text", ""),
             **result,
         }
     )
@@ -387,7 +389,10 @@ def process_directory():
 def save_config():
     data = request.json or {}
     config_data = data.get("config")
-    config_path = _safe_path(data.get("config_path", "config.json"))
+    try:
+        config_path = _safe_path(data.get("config_path", "config.json"))
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid config file path"})
 
     if not config_data:
         return jsonify({"success": False, "message": "No config data provided"})
