@@ -9,17 +9,19 @@ Dependencies:
     - pypdf: pip install pypdf
     - watchdog: pip install watchdog
     - tqdm: pip install tqdm
+    - fontTools: pip install fonttools
+    - indic-transliteration: pip install indic-transliteration
 
 Usage as a service:
     # Run as a service watching a directory
     python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --config config.json
-    
+
     # Run as a service with a specific port for API access
     python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --port 5000
-    
+
 Usage as a library:
     from pdf_cutter_service import PDFCutterService
-    
+
     service = PDFCutterService()
     service.split_pdf(input_file, output_dir, page_ranges)
 """
@@ -35,29 +37,36 @@ import queue
 import http.server
 import socketserver
 import urllib.parse
-from typing import Dict, List, Tuple, Union, Optional, Any
+import socket
+import traceback
+from typing import Dict, List, Tuple, Optional, Any
+from pathlib import Path
+from datetime import datetime
 from pypdf import PdfReader, PdfWriter
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import socket
-from pathlib import Path
-from datetime import datetime
-import traceback
 
 try:
     from tqdm import tqdm
+
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
 
+# Try to import indic_transliteration for better Hindi text processing
+try:
+    from indic_transliteration import sanscript
+    from indic_transliteration.sanscript import SchemeMap, SCHEMES, transliterate
+
+    INDIC_TRANSLITERATION_AVAILABLE = True
+except ImportError:
+    INDIC_TRANSLITERATION_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("pdf_cutter_service.log"),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("pdf_cutter_service.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger("PDF Cutter Service")
 
@@ -99,39 +108,620 @@ class PDFCutterService:
             [(1, 10, 'Intro'), (11, 20, 'Basics'), (21, 30, None)]
         """
         ranges = []
-        
+
         # First, we'll URL decode the ranges string to handle spaces and special characters
         ranges_str = urllib.parse.unquote_plus(ranges_str)
-        
-        # Split by commas, but be careful with lecture names that may contain commas
-        # We'll use a more robust approach - find all page ranges patterns
-        pattern = re.compile(r'(\d+)-(\d+)(?::([^,]*)?)?')
+
+        # Split by commas, (There may be lecture names that contain commas)
+        pattern = re.compile(r"(\d+)-(\d+)(?::([^,]*)?)?")
         matches = pattern.findall(ranges_str)
-        
+
         if not matches:
-            raise ValueError("Invalid ranges format. Expected format: '1-10:Lecture1,11-20:Lecture2'")
-            
+            raise ValueError(
+                "Invalid ranges format. Expected format: '1-10:Lecture1,11-20:Lecture2'"
+            )
+
         for match in matches:
             start_str, end_str, lecture_name = match
-            
+
             try:
                 start = int(start_str)
                 end = int(end_str)
-                
+
                 if start <= 0:
                     raise ValueError(f"Start page must be positive: {start}")
                 if end < start:
-                    raise ValueError(f"End page must be greater than or equal to start page: {start}-{end}")
-                
+                    raise ValueError(
+                        f"End page must be greater than or equal to start page: {start}-{end}"
+                    )
+
                 # Lecture name might be empty
                 if not lecture_name.strip():
                     lecture_name = None
-                    
+
                 ranges.append((start, end, lecture_name))
             except Exception as e:
-                raise ValueError(f"Error parsing page range '{start_str}-{end_str}': {str(e)}")
+                raise ValueError(
+                    f"Error parsing page range '{start_str}-{end_str}': {str(e)}"
+                )
 
         return ranges
+
+    @staticmethod
+    def detect_potential_hindi_encoding_issue(text: str) -> bool:
+        """
+        Detect if the text likely contains incorrectly encoded Hindi text
+
+        Args:
+            text: The text to check
+
+        Returns:
+            True if incorrectly encoded Hindi is detected, False otherwise
+        """
+        # Patterns that commonly appear in incorrectly encoded Hindi (Kruti Dev, Chanakya, etc.)
+        hindi_markers = [
+            "kk",
+            "kh",
+            "kz",
+            "k`",
+            "gh",
+            "ph",
+            "Fk",
+            "Hk",
+            "ek",
+            "ea",
+            "ykZ",
+            "kjk",
+            "osQ",
+            "ksa",
+            "kksa",
+            "ksaa",
+            "kksa",
+            "rk",
+            "eksa",
+            "r%",
+            "kj",
+            "esa",
+            "kr",
+            "dj",
+            "kr",
+            "dj",
+            "kr",
+            "dj",
+            "kkr",
+            "dkj",
+            "kkj",
+        ]
+
+        # Patterns common in Kruti Dev font encoding
+        kruti_dev_patterns = [
+            "M+",
+            "iQ",
+            "<+",
+            "z",
+            "vks",
+            "vkS",
+            "vk",
+            "bZ",
+            "b",
+            "mQ",
+            "m",
+            ",s",
+            ",",
+            "ks",
+            "kS",
+            "k",
+            "h",
+            "q",
+            "w",
+            "`",
+            "s",
+            "S",
+            "a",
+            "a",
+            "gzZ",
+            "ha",
+            "hz",
+            "£",
+            "L+",
+            "nzZ",
+            "ï",
+        ]
+
+        # Check for the typical Kruti Dev / non-Unicode patterns
+        pattern_count = sum(text.count(marker) for marker in hindi_markers)
+        kruti_dev_count = sum(text.count(pattern) for pattern in kruti_dev_patterns)
+
+        # Additional heuristics: proper Hindi Unicode has a lot of Devanagari characters
+        devanagari_range = sum(1 for char in text if "\u0900" <= char <= "\u097f")
+
+        # Kruti Dev encoded text will have very few actual Devanagari Unicode characters
+        # but many Latin characters that form patterns like 'kjk', 'osQ', etc.
+
+        # If we have a significant number of these patterns and few actual Devanagari characters,
+        # it's likely incorrectly encoded Hindi
+        return (
+            pattern_count > 5
+            or kruti_dev_count > 3
+            or ("kjk" in text and "osQ" in text)
+        ) and devanagari_range < len(text) / 10
+
+    @staticmethod
+    def get_hindi_font_mapping(font_type="krutidev"):
+        """
+        Get mapping dictionary for incorrectly encoded Hindi characters based on font type
+
+        Args:
+            font_type: The type of font encoding ('krutidev', 'chanakya', etc.)
+
+        Returns:
+            Dictionary mapping incorrect sequences to correct Unicode characters
+        """
+        mappings = {
+            "krutidev": {
+                # Vowels
+                "v": "अ",
+                "vk": "आ",
+                "fv": "अि",
+                "ik": "इ",
+                "bZ": "ई",
+                "m": "उ",
+                "Å": "ऊ",
+                "½": "ऋ",
+                ",": "ए",
+                ",s": "ऐ",
+                "vks": "ओ",
+                "vkS": "औ",
+                "va": "अं",
+                "v%": "अः",
+                "vkW": "ऑ",
+                # Consonants
+                "d": "क",
+                "[k": "ख",
+                "x": "ग",
+                "?k": "घ",
+                "³": "ङ",
+                "p": "च",
+                "N": "छ",
+                "t": "ज",
+                ">": "झ",
+                "¥": "ञ",
+                "V": "ट",
+                "B": "ठ",
+                "M": "ड",
+                "<": "ढ",
+                ".k": "ण",
+                "r": "त",
+                "Fk": "थ",
+                "n": "द",
+                "/k": "ध",
+                "u": "न",
+                "i": "प",
+                "Q": "फ",
+                "c": "ब",
+                "Hk": "भ",
+                "e": "म",
+                ";": "य",
+                "j": "र",
+                "y": "ल",
+                "o": "व",
+                "'k": "श",
+                '"k': "ष",
+                "l": "स",
+                "g": "ह",
+                "â": "त्र",
+                "K": "ज्ञ",
+                "J": "श्र",
+                "D;": "क्य",
+                "{k": "क्ष",
+                # Matras
+                "k": "ा",
+                "f": "ि",
+                "h": "ी",
+                "q": "ु",
+                "w": "ू",
+                "`": "्",
+                "s": "े",
+                "S": "ै",
+                "ks": "ो",
+                "kS": "ौ",
+                "W": "ॉ",
+                "a": "ं",
+                "%": "ः",
+                "¡": "ँ",
+                # Halant
+                "~": "्",
+                # Half characters/conjuncts
+                "D": "क्",
+                "[": "ख्",
+                "X": "ग्",
+                "?": "घ्",
+                "P": "च्",
+                "T": "ज्",
+                "¶": "ट्",
+                "B": "ठ्",
+                "ï": "ड्",
+                "<": "ढ्",
+                "=": "त्",
+                "F": "थ्",
+                "/": "द्",
+                "/": "ध्",
+                "U": "न्",
+                "I": "प्",
+                "¶": "फ्",
+                "C": "ब्",
+                "H": "भ्",
+                "E": "म्",
+                "¸": "य्",
+                "j": "र्",
+                "Y": "ल्",
+                "O": "व्",
+                "'": "श्",
+                '"': "ष्",
+                "L": "स्",
+                "»": "ह्",
+                # Common patterns from sample text
+                "osQ": "के",
+                "kjk": "ारा",
+                "bar": "इंत",
+                "kj": "ार",
+                "è": "ध",
+                "---": "...",
+                "`": "्",
+                "kka": "ां",
+                "dh": "की",
+                "dk": "का",
+                "esa": "में",
+                "sa": "ें",
+                # Numerals
+                "0": "०",
+                "1": "१",
+                "2": "२",
+                "3": "३",
+                "4": "४",
+                "5": "५",
+                "6": "६",
+                "7": "७",
+                "8": "८",
+                "9": "९",
+                # Special replacements for common patterns
+                "vkbZ": "आई",
+                "kbZ": "ाई",
+                "kb": "ाइ",
+                "kb±": "ाईं",
+                "kba": "ांइ",
+                "Å¡": "ऊँ",
+                "vkfn": "आदि",
+                "Øe": "क्रम",
+                "Z": "़",
+            },
+            "chanakya": {
+                # Similar mapping for Chanakya font
+                # Basic vowels
+                "A": "अ",
+                "Aa": "आ",
+                "i": "इ",
+                "I": "ई",
+                "u": "उ",
+                "U": "ऊ",
+                "e": "ए",
+                "E": "ऐ",
+                "ao": "ओ",
+                "AO": "औ",
+                # Consonants
+                "k": "क",
+                "K": "ख",
+                "g": "ग",
+                "G": "घ",
+                "|": "ङ",
+                "c": "च",
+                "C": "छ",
+                "j": "ज",
+                "J": "झ",
+                "¬": "ञ",
+                "t": "ट",
+                "T": "ठ",
+                "D": "ड",
+                "Z": "ढ",
+                "N": "ण",
+                "w": "त",
+                "W": "थ",
+                "d": "द",
+                "D": "ध",
+                "n": "न",
+                "p": "प",
+                "P": "फ",
+                "b": "ब",
+                "B": "भ",
+                "m": "म",
+                "y": "य",
+                "r": "र",
+                "l": "ल",
+                "v": "व",
+                "S": "श",
+                "R": "ष",
+                "s": "स",
+                "h": "ह",
+                # Matras
+                "a": "ा",
+                "f": "ि",
+                "I": "ी",
+                "u": "ु",
+                "U": "ू",
+                "¤": "्",
+                "o": "े",
+                "O": "ै",
+                "ao": "ो",
+                "AO": "ौ",
+                # Special characters
+                "±": "ड़",
+                "²": "ढ़",
+            },
+        }
+
+        return mappings.get(font_type.lower(), mappings["krutidev"])
+
+    @staticmethod
+    def correct_hindi_text(text: str, font_type="auto") -> str:
+        """
+        Attempt to correct incorrectly encoded Hindi text
+
+        Args:
+            text: The incorrectly encoded text
+            font_type: The type of font encoding ('auto', 'krutidev', 'chanakya', etc.)
+
+        Returns:
+            Corrected text as best as possible
+        """
+        if not text or not PDFCutterService.detect_potential_hindi_encoding_issue(text):
+            return text
+
+        # If we have indic_transliteration library available, use it for better results
+        if INDIC_TRANSLITERATION_AVAILABLE:
+            # Use indic_transliteration for better conversion if available
+            try:
+                # First try converting from HK to Devanagari
+                if any(c in text for c in ["kk", "kh", "gh", "cha", "jh"]):
+                    corrected = transliterate(text, sanscript.HK, sanscript.DEVANAGARI)
+                    if (
+                        sum(1 for c in corrected if "\u0900" <= c <= "\u097f")
+                        > len(corrected) / 10
+                    ):
+                        return corrected
+            except Exception as e:
+                logger.warning(f"Error in transliteration: {str(e)}")
+
+        # If auto-detection, try to determine the font type
+        if font_type == "auto":
+            # Some heuristics to determine font type
+            if "kjk" in text and "osQ" in text:
+                font_type = "krutidev"
+            elif "Aa" in text and "ao" in text:
+                font_type = "chanakya"
+            else:
+                font_type = "krutidev"  # Default to Krutidev
+
+        # Get the appropriate mapping based on the font type
+        mapping = PDFCutterService.get_hindi_font_mapping(font_type)
+
+        # Sort keys by length in descending order to handle longer sequences first
+        keys = sorted(mapping.keys(), key=len, reverse=True)
+
+        # Replace each incorrectly encoded sequence with its correct Unicode equivalent
+        corrected_text = text
+        for key in keys:
+            corrected_text = corrected_text.replace(key, mapping[key])
+
+        return corrected_text
+
+    @staticmethod
+    def post_process_hindi_text(text: str) -> str:
+        """
+        Post-process Hindi text for further corrections after initial conversion
+
+        Args:
+            text: The text to post-process
+
+        Returns:
+            Post-processed text
+        """
+        if not text:
+            return text
+
+        # Fix common issues after conversion
+        corrections = [
+            # Fix double vowels
+            (r"[ा][ा]", "ा"),
+            (r"[ि][ि]", "ि"),
+            (r"[ी][ी]", "ी"),
+            (r"[ु][ु]", "ु"),
+            (r"[ू][ू]", "ू"),
+            (r"[े][े]", "े"),
+            (r"[ै][ै]", "ै"),
+            (r"[ो][ो]", "ो"),
+            (r"[ौ][ौ]", "ौ"),
+            # Fix vowels with halant
+            (r"[्][ा]", "्"),
+            (r"[्][ि]", "्"),
+            (r"[्][ी]", "्"),
+            (r"[्][ु]", "्"),
+            (r"[्][ू]", "्"),
+            (r"[्][े]", "्"),
+            (r"[्][ै]", "्"),
+            (r"[्][ो]", "्"),
+            (r"[्][ौ]", "्"),
+            # Remove extra spaces between Hindi words
+            (r"([^\s\d\W])[ ]+([^\s\d\W])", r"\1\2"),
+            # Fix common word patterns
+            ("अौर", "और"),
+            ("अार", "आर"),
+            ("एक़", "एक"),
+            # Add more corrections as needed
+        ]
+
+        # Apply corrections
+        for pattern, replacement in corrections:
+            text = re.sub(pattern, replacement, text)
+
+        return text
+
+    @staticmethod
+    def fix_encoding(pdf_reader: PdfReader, pdf_writer: PdfWriter) -> PdfWriter:
+        """
+        Fix encoding issues in the PDF, particularly for Hindi text
+
+        Args:
+            pdf_reader: The original PDF reader object
+            pdf_writer: The PDF writer object with pages already added
+
+        Returns:
+            The same PDF writer object with fixed encoding
+        """
+        # Check if we need to fix encoding by examining text content
+        needs_encoding_fix = False
+        sample_text = ""
+        detected_font_type = "krutidev"  # Default font type
+
+        try:
+            # Extract sample text from a few pages to check for Hindi encoding issues
+            for page_num in range(min(3, len(pdf_reader.pages))):
+                try:
+                    page_text = pdf_reader.pages[page_num].extract_text()
+                    if page_text:
+                        sample_text += page_text
+                        if len(sample_text) > 1000:  # Limit sample size
+                            break
+                except Exception as e:
+                    logger.warning(
+                        f"Error extracting text from page {page_num+1}: {str(e)}"
+                    )
+                    continue
+
+            # Check if text contains incorrectly encoded Hindi
+            if sample_text and PDFCutterService.detect_potential_hindi_encoding_issue(
+                sample_text
+            ):
+                needs_encoding_fix = True
+
+                # Try to detect font type based on text patterns
+                if "kjk" in sample_text and "osQ" in sample_text:
+                    detected_font_type = "krutidev"
+                elif "Aa" in sample_text and "ao" in sample_text:
+                    detected_font_type = "chanakya"
+
+                logger.info(
+                    f"Detected incorrectly encoded Hindi text (likely {detected_font_type}), will attempt correction"
+                )
+        except Exception as e:
+            logger.warning(f"Error analyzing PDF content: {str(e)}")
+
+        if not needs_encoding_fix:
+            return pdf_writer
+
+        # Try to fix font encoding in the PDF structure
+        try:
+            # Preserve metadata from the original PDF
+            if pdf_reader.metadata:
+                pdf_writer.add_metadata(pdf_reader.metadata)
+
+            # Set the PDF encoding to Unicode for better Indic script support
+            for i in range(len(pdf_writer.pages)):
+                page = pdf_writer.pages[i]
+                if "/Resources" in page and "/Font" in page["/Resources"]:
+                    for font_name, font in page["/Resources"]["/Font"].items():
+                        if isinstance(font, dict):
+                            # Ensure Unicode encoding
+                            if "/Encoding" in font:
+                                font["/Encoding"] = "/Identity-H"
+
+                            # Look for and fix known problematic fonts
+                            if "/BaseFont" in font:
+                                base_font = str(font["/BaseFont"])
+                                # Check for common fonts used for Hindi that might have encoding issues
+                                if any(
+                                    f in base_font
+                                    for f in [
+                                        "/Kruti",
+                                        "/Mangal",
+                                        "/Walkman",
+                                        "/DevLys",
+                                        "/Shusha",
+                                    ]
+                                ):
+                                    logger.info(
+                                        f"Found problematic Hindi font: {base_font}"
+                                    )
+
+            # Add metadata to help with Hindi text rendering
+            pdf_writer.add_metadata(
+                {
+                    "/Lang": "hi-IN",
+                }
+            )
+
+            logger.info("Applied font encoding fixes to PDF structure")
+
+        except Exception as e:
+            logger.warning(f"Error fixing font encoding in PDF structure: {str(e)}")
+
+        # For PDFs with incorrectly encoded text content, we need to use an additional approach
+        # Create text extraction data with corrected Hindi to be used by text extraction tools
+        try:
+            # Extract and correct text from each page
+            for i in range(len(pdf_writer.pages)):
+                try:
+                    # Get the text content
+                    page = pdf_reader.pages[i]
+                    text = page.extract_text()
+
+                    # If text has encoding issues, correct it
+                    if text and PDFCutterService.detect_potential_hindi_encoding_issue(
+                        text
+                    ):
+                        corrected_text = PDFCutterService.correct_hindi_text(
+                            text, detected_font_type
+                        )
+                        # Apply post-processing to fix common conversion issues
+                        corrected_text = PDFCutterService.post_process_hindi_text(
+                            corrected_text
+                        )
+
+                        logger.info(f"Corrected Hindi text on page {i+1}")
+
+                        # Store the corrected text in the page's annotations or metadata
+                        # This helps text extraction tools get the corrected version
+                        if "/Annots" not in pdf_writer.pages[i]:
+                            pdf_writer.pages[i]["/Annots"] = []
+
+                        # Add invisible text annotation with corrected content
+                        # This is a technique to help text extraction tools
+                        if hasattr(pdf_writer.pages[i], "add_annotation"):
+                            try:
+                                # This is specific to certain PDF libraries that support annotations
+                                annotation = {
+                                    "/Subtype": "/Text",
+                                    "/Contents": corrected_text,
+                                    "/Rect": [0, 0, 0, 0],  # Invisible
+                                    "/F": 0,  # Not visible
+                                    "/NM": f"CorrectedText{i}",
+                                }
+                                pdf_writer.pages[i].add_annotation(annotation)
+                            except Exception as ann_err:
+                                logger.warning(
+                                    f"Error adding annotation: {str(ann_err)}"
+                                )
+                except Exception as e:
+                    logger.warning(
+                        f"Error processing text correction for page {i+1}: {str(e)}"
+                    )
+                    continue
+
+            logger.info("Applied text corrections to PDF content")
+
+        except Exception as e:
+            logger.warning(f"Error in text correction process: {str(e)}")
+
+        return pdf_writer
 
     @staticmethod
     def validate_config(config: Dict) -> bool:
@@ -151,16 +741,14 @@ class PDFCutterService:
         # Check each file entry
         for key, value in config.items():
             if not isinstance(value, dict):
-                raise ValueError(
-                    f"Configuration for '{key}' must be a dictionary")
+                raise ValueError(f"Configuration for '{key}' must be a dictionary")
 
             # Check for page_ranges
-            if 'page_ranges' not in value:
-                raise ValueError(
-                    f"Missing 'page_ranges' in configuration for '{key}'")
+            if "page_ranges" not in value:
+                raise ValueError(f"Missing 'page_ranges' in configuration for '{key}'")
 
             # Check page_ranges format
-            page_ranges = value['page_ranges']
+            page_ranges = value["page_ranges"]
             if not isinstance(page_ranges, list):
                 raise ValueError(f"'page_ranges' for '{key}' must be a list")
 
@@ -168,26 +756,31 @@ class PDFCutterService:
             for i, page_range in enumerate(page_ranges):
                 if not isinstance(page_range, dict):
                     raise ValueError(
-                        f"Page range #{i+1} for '{key}' must be a dictionary")
+                        f"Page range #{i+1} for '{key}' must be a dictionary"
+                    )
 
-                if 'start' not in page_range or 'end' not in page_range:
+                if "start" not in page_range or "end" not in page_range:
                     raise ValueError(
-                        f"Page range #{i+1} for '{key}' must have 'start' and 'end' keys")
+                        f"Page range #{i+1} for '{key}' must have 'start' and 'end' keys"
+                    )
 
-                start = page_range['start']
-                end = page_range['end']
+                start = page_range["start"]
+                end = page_range["end"]
 
                 if not isinstance(start, int) or not isinstance(end, int):
                     raise ValueError(
-                        f"'start' and 'end' for page range #{i+1} in '{key}' must be integers")
+                        f"'start' and 'end' for page range #{i+1} in '{key}' must be integers"
+                    )
 
                 if start <= 0:
                     raise ValueError(
-                        f"'start' for page range #{i+1} in '{key}' must be positive")
+                        f"'start' for page range #{i+1} in '{key}' must be positive"
+                    )
 
                 if end < start:
                     raise ValueError(
-                        f"'end' for page range #{i+1} in '{key}' must be greater than or equal to 'start'")
+                        f"'end' for page range #{i+1} in '{key}' must be greater than or equal to 'start'"
+                    )
 
         return True
 
@@ -202,22 +795,50 @@ class PDFCutterService:
             Dictionary with PDF information
         """
         try:
-            with open(pdf_path, 'rb') as file:
+            with open(pdf_path, "rb") as file:
                 pdf_reader = PdfReader(file)
                 info = {
                     "filename": os.path.basename(pdf_path),
                     "path": pdf_path,
                     "total_pages": len(pdf_reader.pages),
                     "size_kb": round(os.path.getsize(pdf_path) / 1024, 2),
-                    "metadata": {}
+                    "metadata": {},
                 }
 
                 # Extract metadata if available
                 if pdf_reader.metadata:
                     for key, value in pdf_reader.metadata.items():
-                        if key.startswith('/'):
+                        if key.startswith("/"):
                             key = key[1:]  # Remove leading slash
                         info["metadata"][key] = str(value)
+
+                # Check for Hindi text encoding issues
+                sample_text = ""
+                for page_num in range(min(2, len(pdf_reader.pages))):
+                    try:
+                        text = pdf_reader.pages[page_num].extract_text()
+                        if text:
+                            sample_text += text
+                            if len(sample_text) > 500:  # Limit sample size
+                                break
+                    except:
+                        continue
+
+                # Add encoding info to metadata
+                if sample_text and self.detect_potential_hindi_encoding_issue(
+                    sample_text
+                ):
+                    info["has_encoding_issues"] = True
+
+                    # Try to detect font type based on text patterns
+                    if "kjk" in sample_text and "osQ" in sample_text:
+                        info["detected_font_type"] = "krutidev"
+                    elif "Aa" in sample_text and "ao" in sample_text:
+                        info["detected_font_type"] = "chanakya"
+                    else:
+                        info["detected_font_type"] = "unknown"
+                else:
+                    info["has_encoding_issues"] = False
 
                 return info
         except Exception as e:
@@ -225,11 +846,18 @@ class PDFCutterService:
             return {
                 "filename": os.path.basename(pdf_path),
                 "path": pdf_path,
-                "error": str(e)
+                "error": str(e),
             }
 
-    def split_pdf(self, input_file: str, output_dir: str, page_ranges: List[Tuple[int, int, Optional[str]]],
-                  prefix: Optional[str] = None, unit_name: Optional[str] = None) -> List[str]:
+    def split_pdf(
+        self,
+        input_file: str,
+        output_dir: str,
+        page_ranges: List[Tuple[int, int, Optional[str]]],
+        prefix: Optional[str] = None,
+        unit_name: Optional[str] = None,
+        fix_encoding: bool = True,
+    ) -> List[str]:
         """
         Split a PDF file into multiple PDF files based on page ranges
 
@@ -239,6 +867,7 @@ class PDFCutterService:
             page_ranges: List of tuples containing (start_page, end_page, lecture_name)
             prefix: Optional prefix for output file names
             unit_name: Optional unit name to include in output file names
+            fix_encoding: Whether to fix encoding issues for non-Latin scripts (like Hindi)
 
         Returns:
             List of paths to created PDF files
@@ -254,12 +883,11 @@ class PDFCutterService:
         created_files = []
 
         try:
-            with open(input_file, 'rb') as file:
+            with open(input_file, "rb") as file:
                 pdf_reader = PdfReader(file)
                 total_pages = len(pdf_reader.pages)
 
-                logger.info(
-                    f"Processing {input_file} with {total_pages} pages")
+                logger.info(f"Processing {input_file} with {total_pages} pages")
 
                 # Get the base filename without extension
                 base_filename = os.path.basename(input_file)
@@ -269,11 +897,44 @@ class PDFCutterService:
                 if not unit_name:
                     unit_name = base_name
 
+                # Check for encoding issues if fix_encoding is enabled
+                encoding_issues = False
+                font_type = "krutidev"  # Default font type
+
+                if fix_encoding:
+                    sample_text = ""
+                    for page_num in range(min(3, total_pages)):
+                        try:
+                            text = pdf_reader.pages[page_num].extract_text()
+                            if text:
+                                sample_text += text
+                                if len(sample_text) > 1000:  # Limit sample size
+                                    break
+                        except:
+                            continue
+
+                    encoding_issues = (
+                        sample_text
+                        and self.detect_potential_hindi_encoding_issue(sample_text)
+                    )
+
+                    # Try to detect font type based on text patterns
+                    if encoding_issues:
+                        if "kjk" in sample_text and "osQ" in sample_text:
+                            font_type = "krutidev"
+                        elif "Aa" in sample_text and "ao" in sample_text:
+                            font_type = "chanakya"
+
+                        logger.info(
+                            f"Detected Hindi encoding issues with font type: {font_type}"
+                        )
+
                 for i, (start, end, lecture_name) in enumerate(page_ranges, 1):
                     # Validate page ranges
                     if start < 1 or end > total_pages or start > end:
                         logger.warning(
-                            f"Invalid page range {start}-{end} for {input_file} (total pages: {total_pages}), skipping...")
+                            f"Invalid page range {start}-{end} for {input_file} (total pages: {total_pages}), skipping..."
+                        )
                         continue
 
                     # Adjust for 0-based indexing
@@ -287,10 +948,17 @@ class PDFCutterService:
                     page_iterator = range(start_idx, end_idx)
                     if TQDM_AVAILABLE:
                         page_iterator = tqdm(
-                            page_iterator, desc=f"Processing pages {start}-{end}", unit="page")
+                            page_iterator,
+                            desc=f"Processing pages {start}-{end}",
+                            unit="page",
+                        )
 
                     for page_num in page_iterator:
                         pdf_writer.add_page(pdf_reader.pages[page_num])
+
+                    # Fix encoding issues, particularly for Hindi text, if enabled and needed
+                    if fix_encoding and encoding_issues:
+                        pdf_writer = self.fix_encoding(pdf_reader, pdf_writer)
 
                     # Generate output filename
                     if lecture_name:
@@ -305,22 +973,21 @@ class PDFCutterService:
                         filename_parts.append(unit_name)
                     filename_parts.append(lecture_id)
 
-                    output_filename = '_'.join(filename_parts) + '.pdf'
+                    output_filename = "_".join(filename_parts) + ".pdf"
                     output_path = os.path.join(output_dir, output_filename)
 
                     # Write the new PDF file
-                    with open(output_path, 'wb') as output_file:
+                    with open(output_path, "wb") as output_file:
                         pdf_writer.write(output_file)
 
                     created_files.append(output_path)
-                    logger.info(
-                        f"Created {output_path} with pages {start}-{end}")
+                    logger.info(f"Created {output_path} with pages {start}-{end}")
 
                 service_status["processed_files"] += 1
                 service_status["last_processed"] = {
                     "file": base_filename,
                     "time": datetime.now().isoformat(),
-                    "output_files": len(created_files)
+                    "output_files": len(created_files),
                 }
 
                 return created_files
@@ -350,7 +1017,7 @@ class PDFCutterService:
             Dictionary containing configuration
         """
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file, "r") as f:
                 config = json.load(f)
 
             # Validate the configuration
@@ -358,14 +1025,15 @@ class PDFCutterService:
 
             return config
         except json.JSONDecodeError as e:
-            logger.error(
-                f"Invalid JSON in config file {config_file}: {str(e)}")
+            logger.error(f"Invalid JSON in config file {config_file}: {str(e)}")
             raise
         except Exception as e:
             logger.error(f"Error loading config file {config_file}: {str(e)}")
             raise
 
-    def process_directory(self, input_dir: str, output_dir: str, config: Dict) -> Dict[str, Any]:
+    def process_directory(
+        self, input_dir: str, output_dir: str, config: Dict
+    ) -> Dict[str, Any]:
         """
         Process all PDF files in a directory using configuration
 
@@ -383,14 +1051,14 @@ class PDFCutterService:
             "skipped": [],
             "processed_count": 0,
             "skipped_count": 0,
-            "output_files": []
+            "output_files": [],
         }
 
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
         for filename in os.listdir(input_dir):
-            if not filename.lower().endswith('.pdf'):
+            if not filename.lower().endswith(".pdf"):
                 continue
 
             input_path = os.path.join(input_dir, filename)
@@ -404,41 +1072,59 @@ class PDFCutterService:
             # Check if there's a specific configuration for this file
             if filename_without_ext in config:
                 file_config = config[filename_without_ext]
-                page_ranges = [(r['start'], r['end'], r.get('name'))
-                               for r in file_config['page_ranges']]
-                unit_name = file_config.get('unit_name')
-                prefix = file_config.get('prefix')
+                page_ranges = [
+                    (r["start"], r["end"], r.get("name"))
+                    for r in file_config["page_ranges"]
+                ]
+                unit_name = file_config.get("unit_name")
+                prefix = file_config.get("prefix")
+                fix_encoding = file_config.get("fix_encoding", True)
 
                 logger.info(f"Using specific configuration for {filename}")
 
             # Check if there's a configuration for the file pattern
-            elif any(re.match(pattern, filename_without_ext) for pattern in config if pattern.startswith('^') and pattern.endswith('$')):
+            elif any(
+                re.match(pattern, filename_without_ext)
+                for pattern in config
+                if pattern.startswith("^") and pattern.endswith("$")
+            ):
                 # Find the matching pattern
-                matching_pattern = next(pattern for pattern in config if pattern.startswith('^') and pattern.endswith('$')
-                                        and re.match(pattern, filename_without_ext))
+                matching_pattern = next(
+                    pattern
+                    for pattern in config
+                    if pattern.startswith("^")
+                    and pattern.endswith("$")
+                    and re.match(pattern, filename_without_ext)
+                )
 
                 file_config = config[matching_pattern]
-                page_ranges = [(r['start'], r['end'], r.get('name'))
-                               for r in file_config['page_ranges']]
-                unit_name = file_config.get('unit_name')
-                prefix = file_config.get('prefix')
+                page_ranges = [
+                    (r["start"], r["end"], r.get("name"))
+                    for r in file_config["page_ranges"]
+                ]
+                unit_name = file_config.get("unit_name")
+                prefix = file_config.get("prefix")
+                fix_encoding = file_config.get("fix_encoding", True)
 
                 logger.info(
-                    f"Using pattern configuration ({matching_pattern}) for {filename}")
+                    f"Using pattern configuration ({matching_pattern}) for {filename}"
+                )
 
             # Use default configuration if available
-            elif 'default' in config:
-                file_config = config['default']
-                page_ranges = [(r['start'], r['end'], r.get('name'))
-                               for r in file_config['page_ranges']]
-                unit_name = file_config.get('unit_name')
-                prefix = file_config.get('prefix')
+            elif "default" in config:
+                file_config = config["default"]
+                page_ranges = [
+                    (r["start"], r["end"], r.get("name"))
+                    for r in file_config["page_ranges"]
+                ]
+                unit_name = file_config.get("unit_name")
+                prefix = file_config.get("prefix")
+                fix_encoding = file_config.get("fix_encoding", True)
 
                 logger.info(f"Using default configuration for {filename}")
 
             else:
-                logger.warning(
-                    f"No configuration found for {filename}, skipping...")
+                logger.warning(f"No configuration found for {filename}, skipping...")
                 results["skipped"].append(filename)
                 results["skipped_count"] += 1
                 continue
@@ -446,7 +1132,8 @@ class PDFCutterService:
             # Process the file
             try:
                 output_files = self.split_pdf(
-                    input_path, output_dir, page_ranges, prefix, unit_name)
+                    input_path, output_dir, page_ranges, prefix, unit_name, fix_encoding
+                )
                 results["processed"].append(filename)
                 results["processed_count"] += 1
                 results["output_files"].extend(output_files)
@@ -456,7 +1143,8 @@ class PDFCutterService:
                 results["skipped_count"] += 1
 
         logger.info(
-            f"Processed {results['processed_count']} files, skipped {results['skipped_count']} files")
+            f"Processed {results['processed_count']} files, skipped {results['skipped_count']} files"
+        )
 
         return results
 
@@ -478,7 +1166,7 @@ class PDFHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        if not event.src_path.lower().endswith('.pdf'):
+        if not event.src_path.lower().endswith(".pdf"):
             return
 
         # Avoid duplicate processing
@@ -487,8 +1175,7 @@ class PDFHandler(FileSystemEventHandler):
 
         # Add to task queue
         logger.info(f"Detected new PDF: {event.src_path}")
-        task_queue.put((event.src_path, self.output_dir,
-                       self.config_file, self.config))
+        task_queue.put((event.src_path, self.output_dir, self.config_file, self.config))
         self.processing_files.add(event.src_path)
 
 
@@ -512,35 +1199,54 @@ def worker_thread():
                     # Process based on config or prompt for page ranges
                     if config:
                         filename_without_ext = os.path.splitext(
-                            os.path.basename(input_path))[0]
+                            os.path.basename(input_path)
+                        )[0]
 
                         if filename_without_ext in config:
                             file_config = config[filename_without_ext]
-                            page_ranges = [(r['start'], r['end'], r.get('name'))
-                                           for r in file_config['page_ranges']]
-                            unit_name = file_config.get('unit_name')
-                            prefix = file_config.get('prefix')
+                            page_ranges = [
+                                (r["start"], r["end"], r.get("name"))
+                                for r in file_config["page_ranges"]
+                            ]
+                            unit_name = file_config.get("unit_name")
+                            prefix = file_config.get("prefix")
+                            fix_encoding = file_config.get("fix_encoding", True)
 
                             service.split_pdf(
-                                input_path, output_dir, page_ranges, prefix, unit_name)
+                                input_path,
+                                output_dir,
+                                page_ranges,
+                                prefix,
+                                unit_name,
+                                fix_encoding,
+                            )
 
-                        elif 'default' in config:
-                            file_config = config['default']
-                            page_ranges = [(r['start'], r['end'], r.get('name'))
-                                           for r in file_config['page_ranges']]
-                            unit_name = file_config.get('unit_name')
-                            prefix = file_config.get('prefix')
+                        elif "default" in config:
+                            file_config = config["default"]
+                            page_ranges = [
+                                (r["start"], r["end"], r.get("name"))
+                                for r in file_config["page_ranges"]
+                            ]
+                            unit_name = file_config.get("unit_name")
+                            prefix = file_config.get("prefix")
+                            fix_encoding = file_config.get("fix_encoding", True)
 
                             service.split_pdf(
-                                input_path, output_dir, page_ranges, prefix, unit_name)
+                                input_path,
+                                output_dir,
+                                page_ranges,
+                                prefix,
+                                unit_name,
+                                fix_encoding,
+                            )
 
                         else:
                             logger.warning(
-                                f"No configuration found for {input_path}, skipping...")
+                                f"No configuration found for {input_path}, skipping..."
+                            )
 
                 except Exception as e:
-                    logger.error(
-                        f"Error processing task {input_path}: {str(e)}")
+                    logger.error(f"Error processing task {input_path}: {str(e)}")
                     traceback.print_exc()
 
                 finally:
@@ -575,9 +1281,9 @@ class PDFCutterRequestHandler(http.server.BaseHTTPRequestHandler):
 
         try:
             # Status endpoint
-            if path == '/status':
+            if path == "/status":
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
 
                 # Add current task from service
@@ -593,9 +1299,9 @@ class PDFCutterRequestHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             # Help/documentation endpoint
-            elif path == '/' or path == '/help':
+            elif path == "/" or path == "/help":
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/plain')
+                self.send_header("Content-Type", "text/plain")
                 self.end_headers()
 
                 help_text = """
@@ -607,20 +1313,20 @@ Available endpoints:
   POST /split - Split a PDF (provide input_file and ranges parameters)
                 
 Example:
-  curl -X POST "http://localhost:8000/split?input_file=example.pdf&ranges=1-5:Part1,6-10:Part2&output_dir=output"
+  curl -X POST "http://localhost:8111/split?input_file=example.pdf&ranges=1-5:Part1,6-10:Part2&output_dir=output"
                 """
                 self.wfile.write(help_text.encode())
                 return
 
             self.send_response(404)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'Not Found')
+            self.wfile.write(b"Not Found")
 
         except Exception as e:
             logger.error(f"Error handling GET request: {str(e)}")
             self.send_response(500)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(f"Server Error: {str(e)}".encode())
 
@@ -632,20 +1338,22 @@ Example:
 
         try:
             # Split PDF endpoint
-            if path == '/split':
-                if 'input_file' not in query or 'ranges' not in query:
+            if path == "/split":
+                if "input_file" not in query or "ranges" not in query:
                     self.send_response(400)
-                    self.send_header('Content-Type', 'text/plain')
+                    self.send_header("Content-Type", "text/plain")
                     self.end_headers()
                     self.wfile.write(
-                        b'Missing required parameters: input_file and ranges')
+                        b"Missing required parameters: input_file and ranges"
+                    )
                     return
 
-                input_file = query['input_file']
-                ranges_str = query['ranges']
-                output_dir = query.get('output_dir', 'output')
-                prefix = query.get('prefix')
-                unit_name = query.get('unit_name')
+                input_file = query["input_file"]
+                ranges_str = query["ranges"]
+                output_dir = query.get("output_dir", "output")
+                prefix = query.get("prefix")
+                unit_name = query.get("unit_name")
+                fix_encoding = query.get("fix_encoding", "true").lower() == "true"
 
                 try:
                     # Parse page ranges
@@ -653,11 +1361,17 @@ Example:
 
                     # Split the PDF
                     output_files = self.service.split_pdf(
-                        input_file, output_dir, page_ranges, prefix, unit_name)
+                        input_file,
+                        output_dir,
+                        page_ranges,
+                        prefix,
+                        unit_name,
+                        fix_encoding,
+                    )
 
                     # Return success response
                     self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
+                    self.send_header("Content-Type", "application/json")
                     self.end_headers()
 
                     response = {
@@ -665,7 +1379,9 @@ Example:
                         "input_file": input_file,
                         "output_dir": output_dir,
                         "output_files": output_files,
-                        "page_ranges": [(start, end, name) for start, end, name in page_ranges]
+                        "page_ranges": [
+                            (start, end, name) for start, end, name in page_ranges
+                        ],
                     }
 
                     self.wfile.write(json.dumps(response, indent=2).encode())
@@ -673,30 +1389,77 @@ Example:
                 except Exception as e:
                     logger.error(f"Error processing split request: {str(e)}")
                     self.send_response(400)
-                    self.send_header('Content-Type', 'text/plain')
+                    self.send_header("Content-Type", "text/plain")
                     self.end_headers()
                     self.wfile.write(f"Error: {str(e)}".encode())
 
                 return
 
+            # Text correction endpoint for handling Hindi encoding issues directly
+            elif path == "/correct_text":
+                # Get the request body
+                content_length = int(self.headers["Content-Length"])
+                post_data = self.rfile.read(content_length).decode("utf-8")
+                data = json.loads(post_data)
+
+                if "text" not in data:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(b"Missing required parameter: text")
+                    return
+
+                text = data["text"]
+                font_type = data.get("font_type", "auto")
+
+                # Process the text
+                has_encoding_issues = (
+                    self.service.detect_potential_hindi_encoding_issue(text)
+                )
+
+                if has_encoding_issues:
+                    corrected_text = self.service.correct_hindi_text(text, font_type)
+                    corrected_text = self.service.post_process_hindi_text(
+                        corrected_text
+                    )
+                else:
+                    corrected_text = text
+
+                # Return the corrected text
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+
+                response = {
+                    "original_text": text,
+                    "has_encoding_issues": has_encoding_issues,
+                    "corrected_text": corrected_text,
+                    "detected_font_type": (
+                        font_type if font_type != "auto" else "krutidev"
+                    ),
+                }
+
+                self.wfile.write(json.dumps(response, indent=2).encode())
+                return
+
             self.send_response(404)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'Not Found')
+            self.wfile.write(b"Not Found")
 
         except Exception as e:
             logger.error(f"Error handling POST request: {str(e)}")
             self.send_response(500)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(f"Server Error: {str(e)}".encode())
 
 
-def find_available_port(start_port=8000, max_attempts=100):
+def find_available_port(start_port=8001, max_attempts=100):
     """Find an available port starting from start_port"""
     for port in range(start_port, start_port + max_attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(('localhost', port)) != 0:
+            if s.connect_ex(("localhost", port)) != 0:
                 return port
 
     # If no port found, use a random high port
@@ -749,6 +1512,7 @@ def run_service(watch_dir=None, output_dir="output", config_file=None, port=None
         print(f"  - GET  /status - Service status")
         print(f"  - GET  /help   - Help information")
         print(f"  - POST /split  - Split a PDF")
+        print(f"  - POST /correct_text - Correct Hindi text encoding")
         if watch_dir:
             print(f"Watching directory: {watch_dir}")
         print(f"Output directory: {output_dir}")
@@ -791,17 +1555,18 @@ Examples:
   python pdf_cutter_service.py --watch-dir ./input --output-dir ./output --port 5000
   
   # Run as a service without watching a directory (API only)
-  python pdf_cutter_service.py --output-dir ./output --port 8000
-        """
+  python pdf_cutter_service.py --output-dir ./output --port 8111
+        """,
     )
 
+    parser.add_argument("--watch-dir", help="Directory to watch for new PDF files")
     parser.add_argument(
-        '--watch-dir', help='Directory to watch for new PDF files')
-    parser.add_argument('--output-dir', default='output',
-                        help='Output directory for split PDF files')
-    parser.add_argument('--config', help='JSON configuration file')
-    parser.add_argument('--port', type=int,
-                        help='Port for HTTP API (default: auto-detect)')
+        "--output-dir", default="output", help="Output directory for split PDF files"
+    )
+    parser.add_argument("--config", help="JSON configuration file")
+    parser.add_argument(
+        "--port", type=int, help="Port for HTTP API (default: auto-detect)"
+    )
 
     args = parser.parse_args()
 
