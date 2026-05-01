@@ -95,239 +95,15 @@ service_status: Dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
-# KrutiDev / Chanakya → Unicode mapping tables
+# Hindi text conversion — delegated to the dedicated preprocessor module
 # ---------------------------------------------------------------------------
+from hindi_preprocessor import HindiPreprocessor  # noqa: E402
 
-# IMPORTANT NOTE ON APPROACH
-# ---------------------------
-# KrutiDev and Chanakya are *glyph-substitution* fonts: each glyph is
-# addressed via a Latin/ASCII codepoint.  When a PDF viewer renders
-# them, the visual result looks like Devanagari, but the underlying bytes
-# are ASCII.  When pypdf extracts text it returns those raw ASCII bytes.
-#
-# A *perfect* reverse-mapping requires context-aware parsing (the same
-# ASCII byte can mean a standalone vowel OR a vowel matra depending on
-# position).  The table below uses the most common (matra) reading for
-# ambiguous characters and documents every known collision.
-# For production-grade conversion of long documents, combine this with
-# the `indic-transliteration` library or a dedicated KrutiDev parser.
-
-_KRUTIDEV_TO_UNICODE: Dict[str, str] = {
-    # ── Standalone vowels ──────────────────────────────────────────────
-    "v": "अ",
-    "vk": "आ",
-    "bZ": "ई",
-    "Å": "ऊ",
-    "½": "ऋ",
-    ",": "ए",
-    ",s": "ऐ",
-    "vks": "ओ",
-    "vkS": "औ",
-    "va": "अं",
-    "v%": "अः",
-    "vkW": "ऑ",
-    # ── Consonants ────────────────────────────────────────────────────
-    "d": "क",
-    "[k": "ख",
-    "x": "ग",
-    "?k": "घ",
-    "³": "ङ",
-    "p": "च",
-    "N": "छ",
-    "t": "ज",
-    ">": "झ",
-    "¥": "ञ",
-    "V": "ट",
-    "B": "ठ",
-    "M": "ड",
-    "<": "ढ",
-    ".k": "ण",
-    "r": "त",
-    "Fk": "थ",
-    "n": "द",
-    "/k": "ध",
-    "u": "न",
-    "i": "प",
-    "Q": "फ",
-    "c": "ब",
-    "Hk": "भ",
-    "e": "म",
-    ";": "य",
-    "j": "र",
-    "y": "ल",
-    "o": "व",
-    "'k": "श",
-    '"k': "ष",
-    "l": "स",
-    "g": "ह",
-    # ── Conjuncts / special forms ─────────────────────────────────────
-    "â": "त्र",
-    "K": "ज्ञ",
-    "J": "श्र",
-    "D;": "क्य",
-    "{k": "क्ष",
-    # ── Vowel matras (dependent vowel signs) ──────────────────────────
-    "k": "ा",  # aa-matra  (AMBIGUOUS: same as consonant cluster suffix)
-    "f": "ि",  # i-matra
-    "h": "ी",  # ii-matra
-    "q": "ु",  # u-matra
-    "w": "ू",  # uu-matra
-    "`": "्",  # halant / virama
-    "s": "े",  # e-matra
-    "S": "ै",  # ai-matra
-    "ks": "ो",  # o-matra
-    "kS": "ौ",  # au-matra
-    "W": "ॉ",  # aw-matra
-    "a": "ं",  # anusvara
-    "%": "ः",  # visarga
-    "¡": "ँ",  # chandrabindu
-    "~": "्",  # halant (alternate)
-    # ── Half-forms / pre-consonant halant forms ───────────────────────
-    "D": "क्",
-    "[": "ख्",
-    "X": "ग्",
-    "?": "घ्",
-    "P": "च्",
-    "T": "ज्",
-    "U": "न्",
-    "I": "प्",
-    "C": "ब्",
-    "H": "भ्",
-    "E": "म्",
-    "¸": "य्",
-    "Y": "ल्",
-    "O": "व्",
-    "'": "श्",
-    '"': "ष्",
-    "L": "स्",
-    "»": "ह्",
-    "=": "त्",
-    "F": "थ्",
-    "/": "द्",
-    # ── Common high-frequency patterns ───────────────────────────────
-    "osQ": "के",
-    "kjk": "ारा",
-    "dh": "की",
-    "dk": "का",
-    "esa": "में",
-    "sa": "ें",
-    "ksa": "ों",
-    # ── Devanagari digits ─────────────────────────────────────────────
-    "0": "०",
-    "1": "१",
-    "2": "२",
-    "3": "३",
-    "4": "४",
-    "5": "५",
-    "6": "६",
-    "7": "७",
-    "8": "८",
-    "9": "९",
-    # ── Misc ─────────────────────────────────────────────────────────
-    "vkbZ": "आई",
-    "kbZ": "ाई",
-    "vkfn": "आदि",
-    "Øe": "क्रम",
-    "è": "ध",
-    "---": "…",
-    "Z": "़",  # nukta
-    # ── Characters frequently found in mixed Unicode/KrutiDev PDFs ────
-    "b": "इ",    # standalone vowel इ (short i)
-    "m": "उ",    # standalone vowel उ (short u)
-    "R": "ऋ",    # vocalic r
-    "+": "़",    # nukta (ड+ा → ड़ा, खड+ा → खड़ा)
-    "z": "\u094D\u0930",  # reph / eyelash ra (्र)
-    "&": "-",    # compound joiner (आस&पास → आस-पास)
-    "µ": " ",    # clause separator
-    "A": "।",    # danda (sentence terminator)
-}
+# Backwards-compatible aliases — all heavy lifting is in HindiPreprocessor
+_KRUTIDEV_TO_UNICODE = HindiPreprocessor.get_mapping("krutidev")
+_CHANAKYA_TO_UNICODE = HindiPreprocessor.get_mapping("chanakya")
 
 # Chanakya mapping — standalone, no duplicate keys.
-# Ambiguous chars (those that could be vowel OR matra) are mapped to
-# their matra (dependent) form since that is far more frequent.
-# Standalone vowel forms (अ, इ, उ …) are encoded differently in
-# Chanakya; use the two-char sequences (Aa, ao, AO …) where possible.
-_CHANAKYA_TO_UNICODE: Dict[str, str] = {
-    # ── Standalone vowels (multi-char sequences avoid collision) ──────
-    "A": "अ",
-    "Aa": "आ",
-    "ao": "ओ",
-    "AO": "औ",
-    # ── Consonants ────────────────────────────────────────────────────
-    "k": "क",
-    "K": "ख",
-    "g": "ग",
-    "G": "घ",
-    "|": "ङ",
-    "c": "च",
-    "C": "छ",
-    "j": "ज",
-    "J": "झ",
-    "¬": "ञ",
-    "t": "ट",
-    "T": "ठ",
-    "n": "न",
-    "N": "ण",
-    "w": "त",
-    "W": "थ",
-    "d": "द",
-    "p": "प",
-    "P": "फ",
-    "b": "ब",
-    "m": "म",
-    "y": "य",
-    "r": "र",
-    "l": "ल",
-    "v": "व",
-    "S": "श",
-    "R": "ष",
-    "s": "स",
-    "h": "ह",
-    # ── Matras (dependent vowel signs) — mapped preferentially ────────
-    # NOTE: "i"→ि, "I"→ी, "u"→ु, "U"→ू override standalone vowel
-    # readings for the same char.  Standalone इ/ई/उ/ऊ in Chanakya
-    # are accessed via two-char sequences not present here — document
-    # any edge-cases in your source PDFs and add explicit entries.
-    "a": "ा",
-    "f": "ि",
-    "i": "ि",  # collision: also standalone इ — matra wins statistically
-    "I": "ी",  # collision: also standalone ई — matra wins
-    "u": "ु",  # collision: also standalone उ — matra wins
-    "U": "ू",  # collision: also standalone ऊ — matra wins
-    "o": "े",
-    "O": "ै",
-    # ── Special characters ────────────────────────────────────────────
-    "±": "ड़",
-    "²": "ढ़",
-    # ── Additional consonants ────────────────────────────────────────
-    # NOTE: In Chanakya, "D" maps to ड and "d" maps to द.  The retroflex
-    # sound ध (dh) shares no single-char codepoint — it is typically
-    # encoded as the conjunct "d" + halant in Chanakya PDFs.
-    "D": "ड",
-    "Z": "ढ",
-    "B": "भ",  # भ (ब is "b")
-    "e": "ए",
-    "E": "ऐ",
-    # ── Halant (virama) ──────────────────────────────────────────────
-    "¤": "्",
-    # ── Anusvara / Visarga / Chandrabindu ────────────────────────────
-    "M": "ं",
-    "H": "ः",
-    "`": "ँ",
-    # ── Nukta ────────────────────────────────────────────────────────
-    "q": "़",
-    # ── Numbers ──────────────────────────────────────────────────────
-    "0": "०",
-    "1": "१",
-    "2": "२",
-    "3": "३",
-    "4": "४",
-    "5": "५",
-    "6": "६",
-    "7": "७",
-    "8": "८",
-    "9": "९",
-}
 
 
 class PDFCutterService:
@@ -359,9 +135,7 @@ class PDFCutterService:
         matches = pattern.findall(ranges_str)
 
         if not matches:
-            raise ValueError(
-                "Invalid ranges format. Expected: '1-10:Lecture1,11-20:Lecture2'"
-            )
+            raise ValueError("Invalid ranges format. Expected: '1-10:Lecture1,11-20:Lecture2'")
 
         result = []
         for start_str, end_str, lecture_name in matches:
@@ -371,215 +145,42 @@ class PDFCutterService:
             if end < start:
                 raise ValueError(f"End page must be ≥ start page: {start}-{end}")
             result.append((start, end, lecture_name.strip() or None))
-        return result
 
     # ------------------------------------------------------------------ #
-    #  Hindi encoding detection                                           #
+    #  Hindi encoding detection & conversion (delegated)                 #
     # ------------------------------------------------------------------ #
 
     @staticmethod
     def detect_encoding_issues(text: str) -> Tuple[bool, str]:
-        """
-        Detect whether *text* contains legacy Hindi font encoding artefacts
-        (KrutiDev, Chanakya, DevLys, etc.).
+        """Delegate to :meth:`HindiPreprocessor.detect_encoding`."""
+        return HindiPreprocessor.detect_encoding(text)
 
-        Returns:
-            ``(has_issues, detected_font_type)`` where *detected_font_type* is
-            one of ``"krutidev"``, ``"chanakya"``, or ``"unknown"``.
-
-        Note:
-            Detection is heuristic-based and may produce false positives on
-            documents that contain a mix of Latin and Devanagari text.
-        """
-        if not text:
-            return False, "unknown"
-
-        # How many actual Devanagari Unicode codepoints are present?
-        devanagari_count = sum(1 for ch in text if "\u0900" <= ch <= "\u097f")
-        devanagari_ratio = devanagari_count / max(len(text), 1)
-
-        # If the text is already mostly Unicode Devanagari, it is fine.
-        if devanagari_ratio > 0.3:
-            return False, "unknown"
-
-        # Fingerprint patterns exclusive to KrutiDev glyph encoding
-        krutidev_fingerprints = ["osQ", "kjk", "ykZ", "Fk", "Hk", "/k", "'k"]
-        chanakya_fingerprints = ["Aa", "ao", "AO", "¬", "¤"]
-
-        kd_score = sum(text.count(p) for p in krutidev_fingerprints)
-        ch_score = sum(text.count(p) for p in chanakya_fingerprints)
-
-        # Broad KrutiDev heuristic: many short Latin-lookalike sequences
-        generic_score = sum(
-            text.count(p)
-            for p in ["kk", "kh", "kz", "gh", "ph", "ek", "ea", "kj", "dj"]
-        )
-
-        has_issues = (
-            kd_score + ch_score + generic_score
-        ) > 4 and devanagari_ratio < 0.1
-
-        if not has_issues:
-            return False, "unknown"
-
-        if kd_score >= ch_score:
-            return True, "krutidev"
-        return True, "chanakya"
-
-    # Keep the old name as a convenience alias (backwards compat)
     @staticmethod
     def detect_potential_hindi_encoding_issue(text: str) -> bool:
         """Deprecated alias for :meth:`detect_encoding_issues`."""
-        has_issues, _ = PDFCutterService.detect_encoding_issues(text)
+        has_issues, _ = HindiPreprocessor.detect_encoding(text)
         return has_issues
-
-    # ------------------------------------------------------------------ #
-    #  Character-level conversion                                         #
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def get_hindi_font_mapping(font_type: str = "krutidev") -> Dict[str, str]:
-        """
-        Return the character mapping table for *font_type*.
-
-        Args:
-            font_type: ``"krutidev"`` (default) or ``"chanakya"``.
-        """
-        tables = {"krutidev": _KRUTIDEV_TO_UNICODE, "chanakya": _CHANAKYA_TO_UNICODE}
-        return tables.get(font_type.lower(), _KRUTIDEV_TO_UNICODE)
+        """Delegate to :meth:`HindiPreprocessor.get_mapping`."""
+        return HindiPreprocessor.get_mapping(font_type)
 
     @staticmethod
     def convert_to_unicode(text: str, font_type: str = "auto") -> str:
-        """
-        Convert legacy-font-encoded *text* to Unicode Devanagari.
+        """Delegate to :meth:`HindiPreprocessor.convert`."""
+        return HindiPreprocessor.convert(text, font_type)
 
-        The converter handles the common case where pypdf extracts a **mix**
-        of Unicode Devanagari and legacy font codes from the same PDF page.
-        It preserves existing Devanagari characters and only converts the
-        remaining legacy-encoded portions.
-
-        Key improvements over naive string replacement:
-
-        1. **Unicode-aware**: Characters already in the Devanagari range
-           (U+0900–U+097F) are kept as-is.
-        2. **i-matra reordering**: In KrutiDev the ``ि`` glyph is stored
-           *before* the consonant it modifies.  A post-pass reorders it to
-           the correct Unicode position (after the consonant cluster).
-        3. **Longest-match tokenisation**: Multi-character KrutiDev
-           sequences are matched before single characters to avoid
-           partial replacements.
-
-        Accuracy is ~90–95 % on typical NCERT / government PDFs.
-        For critical documents, follow up with manual review.
-        """
-        if not text:
-            return text
-
-        # Detect encoding type (used only for auto-detection of font_type)
-        _, detected_type = PDFCutterService.detect_encoding_issues(text)
-
-        if font_type == "auto":
-            font_type = detected_type
-
-        # NOTE: The indic_transliteration fallback has been removed.  The HK-
-        # scheme detection heuristic ("kk" / "kh" / "gh" / … in text) is too
-        # loose — those two-letter sequences appear in genuine KrutiDev text
-        # as well, causing the library to garble the output.  Our own mapping-
-        # based conversion handles KrutiDev and Chanakya correctly.
-
-        mapping = PDFCutterService.get_hindi_font_mapping(font_type)
-
-        # Sort mapping keys by length (longest first) for greedy matching
-        keys_by_length = sorted(mapping.keys(), key=len, reverse=True)
-
-        # ── Pass 1: Token-by-token substitution, skipping Devanagari ──
-        result_parts: list[str] = []
-        i = 0
-        while i < len(text):
-            ch = text[i]
-
-            # Preserve characters already in Devanagari Unicode range
-            if "\u0900" <= ch <= "\u097f":
-                result_parts.append(ch)
-                i += 1
-                continue
-
-            # Try longest KrutiDev match at current position
-            matched = False
-            for key in keys_by_length:
-                klen = len(key)
-                if i + klen <= len(text) and text[i : i + klen] == key:
-                    result_parts.append(mapping[key])
-                    i += klen
-                    matched = True
-                    break
-
-            if not matched:
-                result_parts.append(ch)
-                i += 1
-
-        converted = "".join(result_parts)
-
-        # ── Pass 2: Reorder i-matra (ि) to after its consonant cluster ──
-        # In KrutiDev the i-matra appears *before* the consonant visually.
-        # Unicode requires it *after* the consonant (or consonant cluster).
-        # Pattern: ि followed by (consonant+halant)* + consonant
-        _IMATRA = "\u093f"           # ि
-        _HALANT = "\u094d"           # ्
-        _CONS = "\u0915-\u0939"      # क–ह (consonant range)
-        converted = re.sub(
-            _IMATRA + f"((?:[{_CONS}]{_HALANT})*[{_CONS}])",
-            f"\\1{_IMATRA}",
-            converted,
-        )
-
-        return converted
-
-    # Keep old name as alias
     @staticmethod
     def correct_hindi_text(text: str, font_type: str = "auto") -> str:
-        """Deprecated alias for :meth:`convert_to_unicode`."""
-        return PDFCutterService.convert_to_unicode(text, font_type)
+        """Convert + post-process. Delegates to :class:`HindiPreprocessor`."""
+        return HindiPreprocessor.correct_hindi_text(text, font_type)
 
     @staticmethod
     def post_process_hindi_text(text: str) -> str:
-        """
-        Clean up common artefacts that appear after KrutiDev → Unicode
-        substitution.
+        """Delegate to :meth:`HindiPreprocessor.post_process`."""
+        return HindiPreprocessor.post_process(text)
 
-        What this fixes:
-            - Doubled matra characters (ाा → ा, ीी → ी, …)
-            - Common mis-spellings introduced by substitution errors
-              (अौर → और, अार → आर)
-
-        What this does NOT do:
-            - It no longer strips matras that appear after a virama (halant).
-              The previous version contained patterns like ``(र्"[्][ा]", "्")``
-              which incorrectly removed valid matras in conjunct consonants.
-        """
-        if not text:
-            return text
-
-        corrections = [
-            # ── Remove doubled matras ───────────────────────────────────
-            (r"ाा", "ा"),
-            (r"िि", "ि"),
-            (r"ीी", "ी"),
-            (r"ुु", "ु"),
-            (r"ूू", "ू"),
-            (r"ेे", "े"),
-            (r"ैै", "ै"),
-            (r"ोो", "ो"),
-            (r"ौौ", "ौ"),
-            (r"ंं", "ं"),
-            # ── Common word-level corrections ───────────────────────────
-            ("अौर", "और"),
-            ("अार", "आर"),
-            ("एक़", "एक"),
-        ]
-
-        for pattern, replacement in corrections:
-            text = re.sub(pattern, replacement, text)
         return text
 
     # ------------------------------------------------------------------ #
@@ -786,21 +387,13 @@ class PDFCutterService:
                 if not isinstance(pr, dict):
                     raise ValueError(f"page_ranges[{i}] in '{key}' must be a dict")
                 if "start" not in pr or "end" not in pr:
-                    raise ValueError(
-                        f"page_ranges[{i}] in '{key}' needs 'start' and 'end'"
-                    )
+                    raise ValueError(f"page_ranges[{i}] in '{key}' needs 'start' and 'end'")
                 if not isinstance(pr["start"], int) or not isinstance(pr["end"], int):
-                    raise ValueError(
-                        f"'start'/'end' in page_ranges[{i}] of '{key}' must be int"
-                    )
+                    raise ValueError(f"'start'/'end' in page_ranges[{i}] of '{key}' must be int")
                 if pr["start"] <= 0:
-                    raise ValueError(
-                        f"'start' in page_ranges[{i}] of '{key}' must be > 0"
-                    )
+                    raise ValueError(f"'start' in page_ranges[{i}] of '{key}' must be > 0")
                 if pr["end"] < pr["start"]:
-                    raise ValueError(
-                        f"'end' must be ≥ 'start' in page_ranges[{i}] of '{key}'"
-                    )
+                    raise ValueError(f"'end' must be ≥ 'start' in page_ranges[{i}] of '{key}'")
         return True
 
     @staticmethod
@@ -963,11 +556,7 @@ class PDFCutterService:
                 file_config = config[key]
             else:
                 for pattern, cfg in config.items():
-                    if (
-                        pattern.startswith("^")
-                        and pattern.endswith("$")
-                        and re.match(pattern, key)
-                    ):
+                    if pattern.startswith("^") and pattern.endswith("$") and re.match(pattern, key):
                         file_config = cfg
                         break
                 if file_config is None and "default" in config:
@@ -980,16 +569,13 @@ class PDFCutterService:
                 continue
 
             page_ranges = [
-                (r["start"], r["end"], r.get("name"))
-                for r in file_config["page_ranges"]
+                (r["start"], r["end"], r.get("name")) for r in file_config["page_ranges"]
             ]
             unit_name = file_config.get("unit_name")
             prefix = file_config.get("prefix")
 
             try:
-                out_files = self.split_pdf(
-                    input_path, output_dir, page_ranges, prefix, unit_name
-                )
+                out_files = self.split_pdf(input_path, output_dir, page_ranges, prefix, unit_name)
                 results["processed"].append(filename)
                 results["processed_count"] += 1
                 results["output_files"].extend(out_files)
@@ -1072,8 +658,7 @@ def worker_thread() -> None:
                 continue
 
             page_ranges = [
-                (r["start"], r["end"], r.get("name"))
-                for r in file_config["page_ranges"]
+                (r["start"], r["end"], r.get("name")) for r in file_config["page_ranges"]
             ]
             svc.split_pdf(
                 input_path,
@@ -1187,11 +772,7 @@ class PDFCutterRequestHandler(http.server.BaseHTTPRequestHandler):
                 text = body["text"]
                 font_type = body.get("font_type", "auto")
                 has_issues, detected = self.service.detect_encoding_issues(text)
-                corrected = (
-                    self.service.convert_to_unicode(text, font_type)
-                    if has_issues
-                    else text
-                )
+                corrected = self.service.convert_to_unicode(text, font_type) if has_issues else text
                 if has_issues:
                     corrected = self.service.post_process_hindi_text(corrected)
                 self._json(
@@ -1252,9 +833,7 @@ def run_service(
     observer = None
     if watch_dir:
         observer = Observer()
-        observer.schedule(
-            PDFHandler(output_dir, config_file, config), watch_dir, recursive=False
-        )
+        observer.schedule(PDFHandler(output_dir, config_file, config), watch_dir, recursive=False)
         observer.start()
         logger.info("Watching: %s", watch_dir)
 
