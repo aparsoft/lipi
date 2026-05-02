@@ -133,10 +133,13 @@
                                         <i class="fas fa-copy"></i> Copy Unicode Text
                                     </button>
                                 </div>
-                                <label class="form-label"><strong>Raw Extracted Text</strong></label>
-                                <pre id="raw-text-preview" class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; display: none; white-space: pre-wrap; word-wrap: break-word;"></pre>
+                                <label class="form-label"><strong>Raw Extracted Text</strong> <span class="text-muted small">(direct pypdf output —
+                                        garbled ASCII for legacy fonts)</span></label>
+                                <pre id="raw-text-preview" class="bg-light p-3 rounded border border-warning"
+                                    style="max-height: 300px; overflow-y: auto; display: none; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;"></pre>
 
-                                <label class="form-label"><strong>Unicode Converted Text</strong></label>
+                                <label class="form-label"><strong>Unicode Converted Text</strong> <span class="text-muted small">(KrutiDev/Chanakya →
+                                        Devanagari)</span></label>
                                 <pre id="unicode-text-preview" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
                             </div>
                         </div>
@@ -626,13 +629,13 @@
                     $('#extract-text-btn').html('<i class="fas fa-file-export"></i> Extract Unicode Text');
 
                     if (response.success) {
-                        extractedRawText = response.extracted_text || '';
-                        extractedUnicodeText = response.corrected_text || response.extracted_text || '';
+                        extractedRawText = response.raw_text || '';
+                        extractedUnicodeText = response.corrected_text || '';
 
                         $('#extraction-result').show();
 
                         if (response.has_encoding_issues) {
-                            $('#extraction-status').attr('class', 'badge bg-warning text-dark').text('Legacy encoding detected');
+                            $('#extraction-status').attr('class', 'badge bg-warning text-dark').text('Legacy encoding detected — ' + (response.detected_font_type || 'unknown'));
                         } else {
                             $('#extraction-status').attr('class', 'badge bg-success').text('Unicode / No issues');
                         }
@@ -640,7 +643,16 @@
                         const font = response.detected_font_type || 'unknown';
                         $('#extraction-font').text(font === 'unknown' ? 'No legacy font' : font.charAt(0).toUpperCase() + font.slice(1));
 
+                        // Raw text: always show when legacy font detected
                         $('#raw-text-preview').text(extractedRawText);
+                        if (response.has_encoding_issues) {
+                            $('#raw-text-preview').show();
+                            $('#toggle-raw-text').html('<i class="fas fa-eye-slash"></i> Hide Raw Text');
+                        } else {
+                            $('#raw-text-preview').hide();
+                            $('#toggle-raw-text').html('<i class="fas fa-eye"></i> Show Raw (Before Conversion)');
+                        }
+
                         $('#unicode-text-preview').text(extractedUnicodeText || extractedRawText);
 
                         showAlert('success', 'Text extracted from ' + response.total_pages + ' page(s)');
