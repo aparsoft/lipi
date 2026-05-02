@@ -1,7 +1,7 @@
 # Lipi
 
-> **Part of the [Aparsoft](https://aparsoft.in) open-source EdTech toolchain**
-> Built for the [Apar Academy](https://aparacademy.in) Hindi PDF content ingestion pipeline — open-sourced for the Indian EdTech community.
+> **Part of the [Aparsoft](https://aparsoft.com) open-source EdTech toolchain**
+> Built for the [Apar Academy](https://aparacademy.com) Hindi PDF content ingestion pipeline — open-sourced for the Indian EdTech community.
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -233,8 +233,8 @@ pytest
 
 ## License
 
-MIT © [Aparsoft Private Limited](https://aparsoft.in)
+MIT © [Aparsoft Private Limited](https://aparsoft.com)
 
 ---
 
-*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparsoft.in) delivers Hindi curriculum-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
+*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparsoft.com) delivers Hindi curriculum-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
