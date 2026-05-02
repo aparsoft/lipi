@@ -2,10 +2,6 @@ import atexit
 import os
 import json
 import glob
-import sys
-import time
-import subprocess
-import requests as http_requests
 from datetime import datetime
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
@@ -30,9 +26,6 @@ app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-SERVICE_PROCESS = None
-DEFAULT_SERVICE_URL = "http://localhost:8111"
-
 
 # ---------------------------------------------------------------------------
 # Security helper
@@ -52,51 +45,13 @@ def _safe_path(user_path: str, allowed_base: str = BASE_DIR) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Service management
+# Service status — all operations run in-process via the lipi package,
+# so the service is always "running".
 # ---------------------------------------------------------------------------
 
 
-def start_service_process(output_dir: str, config_file=None, port: int = 8111) -> bool:
-    global SERVICE_PROCESS
-    cmd = [
-        sys.executable,
-        "-m",
-        "lipi.cli",
-        "serve",
-        "--output-dir",
-        output_dir,
-        "--port",
-        str(port),
-    ]
-    if config_file:
-        cmd += ["--config", config_file]
-
-    try:
-        SERVICE_PROCESS = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-        )
-        time.sleep(2)
-        return True
-    except Exception as exc:
-        print(f"Failed to start service: {exc}")
-        return False
-
-
-def check_service_status(url: str = DEFAULT_SERVICE_URL) -> dict:
-    try:
-        resp = http_requests.get(f"{url}/status", timeout=2)
-        if resp.status_code == 200:
-            return resp.json()
-        return {"running": False, "error": f"HTTP {resp.status_code}"}
-    except http_requests.exceptions.ConnectionError:
-        return {"running": False, "error": "Cannot connect to service"}
-    except Exception as exc:
-        return {"running": False, "error": str(exc)}
+def check_service_status() -> dict:
+    return {"running": True, "version": SERVICE_VERSION}
 
 
 def get_pdf_info(file_path: str) -> dict:
@@ -104,7 +59,7 @@ def get_pdf_info(file_path: str) -> dict:
 
 
 def correct_hindi_text(
-    text: str, font_type: str = "auto", service_url: str = DEFAULT_SERVICE_URL
+    text: str, font_type: str = "auto"
 ) -> dict:
     """Correct legacy Hindi font encoding (in-process, no service dependency)."""
     has_issues, detected = HindiPreprocessor.detect_encoding(text)
@@ -188,24 +143,6 @@ def config_editor():
 # ---------------------------------------------------------------------------
 # Routes — API
 # ---------------------------------------------------------------------------
-
-
-@app.route("/start_service", methods=["POST"])
-def start_service():
-    out_dir = request.form.get("output_dir", "output")
-    port = int(request.form.get("port", 8888))
-    config_file = (
-        request.form.get("config_file", "") or None
-        if request.form.get("use_config") == "on"
-        else None
-    )
-    if config_file and not os.path.isfile(config_file):
-        return jsonify(
-            {"success": False, "message": f"Config file not found: {config_file}"}
-        )
-    success = start_service_process(out_dir, config_file, port)
-    msg = "Service started successfully" if success else "Failed to start service"
-    return jsonify({"success": success, "message": msg})
 
 
 @app.route("/service_status")
@@ -450,10 +387,7 @@ def delete_file():
 
 @atexit.register
 def cleanup():
-    global SERVICE_PROCESS
-    if SERVICE_PROCESS:
-        SERVICE_PROCESS.terminate()
-        SERVICE_PROCESS = None
+    pass
 
 
 if __name__ == "__main__":

@@ -71,36 +71,9 @@
                         </div>
                         <div class="card-body">
                             <!-- Service Status -->
-                            <div id="service-status" class="service-status {% if status.running %}service-running{% else %}service-stopped{% endif %}">
-                                {% if status.running %}
+                            <div id="service-status" class="service-status service-running">
                                 <i class="fas fa-circle-check"></i> Service is running
-                                {% else %}
-                                <i class="fas fa-circle-xmark"></i> Service is not running
-                                {% endif %}
                             </div>
-                            
-                            {% if not status.running %}
-                            <!-- Service Start Form -->
-                            <form id="start-service-form">
-                                <div class="mb-3">
-                                    <label for="output_dir" class="form-label">Output Directory</label>
-                                    <input type="text" class="form-control" id="output_dir" name="output_dir" value="output">
-                                </div>
-                                <div class="mb-3">
-                                    <label for="port" class="form-label">Port</label>
-                                    <input type="number" class="form-control" id="port" name="port" value="8111" min="1024" max="65535">
-                                </div>
-                                <div class="mb-3 form-check">
-                                    <input type="checkbox" class="form-check-input" id="use_config" name="use_config">
-                                    <label class="form-check-label" for="use_config">Use Config File</label>
-                                </div>
-                                <div class="mb-3" id="config_file_group" style="display: none;">
-                                    <label for="config_file" class="form-label">Config File Path</label>
-                                    <input type="text" class="form-control" id="config_file" name="config_file" value="config.json">
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">Start Service</button>
-                            </form>
-                            {% endif %}
                             
                             <hr>
                             
