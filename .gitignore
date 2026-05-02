@@ -85,6 +85,7 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+.pypirc
 
 # Documentation
 docs/_build/
