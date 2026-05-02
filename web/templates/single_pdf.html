@@ -124,22 +124,34 @@
                                 <div class="mb-2">
                                     <span id="extraction-status" class="badge"></span>
                                     <span id="extraction-font" class="badge bg-secondary ms-1"></span>
+                                    <span id="extraction-diff" class="badge ms-1"></span>
+                                    </div>
+                                    <div id="extraction-summary" class="alert alert-secondary py-2 mb-3"></div>
+                                    <div class="row g-2 mb-3 small text-muted">
+                                        <div class="col-md-6">
+                                            <strong>Step 1:</strong> show the exact text extracted by <code>pypdf</code>.
+                                            <span id="raw-char-count" class="ms-1"></span>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Step 2:</strong> show the output after <code>lipi-aparsoft</code> detection and conversion.
+                                            <span id="unicode-char-count" class="ms-1"></span>
+                                        </div>
                                 </div>
                                 <div class="mb-2">
                                     <button class="btn btn-sm btn-outline-secondary" id="toggle-raw-text">
-                                        <i class="fas fa-eye"></i> Show Raw (Before Conversion)
+                                        <i class="fas fa-eye-slash"></i> Hide Raw pypdf Text
                                     </button>
                                     <button class="btn btn-sm btn-outline-success" id="copy-unicode-text">
                                         <i class="fas fa-copy"></i> Copy Unicode Text
                                     </button>
                                 </div>
-                                <label class="form-label"><strong>Raw Extracted Text</strong> <span class="text-muted small">(direct pypdf output —
-                                        garbled ASCII for legacy fonts)</span></label>
+                                <label class="form-label"><strong>1. Raw pypdf Extracted Text</strong> <span class="text-muted small">(exact extraction
+                                        before lipi-aparsoft touches it)</span></label>
                                 <pre id="raw-text-preview" class="bg-light p-3 rounded border border-warning"
-                                    style="max-height: 300px; overflow-y: auto; display: none; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;"></pre>
+                                    style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;"></pre>
 
-                                <label class="form-label"><strong>Unicode Converted Text</strong> <span class="text-muted small">(KrutiDev/Chanakya →
-                                        Devanagari)</span></label>
+                                <label class="form-label"><strong>2. lipi-aparsoft Unicode Output</strong> <span class="text-muted small">(after
+                                        detection, conversion, and cleanup)</span></label>
                                 <pre id="unicode-text-preview" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
                             </div>
                         </div>
@@ -633,6 +645,12 @@
                         extractedUnicodeText = response.corrected_text || '';
 
                         $('#extraction-result').show();
+                        $('#extraction-summary')
+                            .removeClass('alert-success alert-secondary alert-info alert-warning')
+                            .addClass('alert-' + (response.comparison_tone || 'secondary'))
+                            .text(response.extraction_summary || '');
+                        $('#raw-char-count').text('(' + (response.raw_char_count || extractedRawText.length) + ' chars)');
+                        $('#unicode-char-count').text('(' + (response.unicode_char_count || extractedUnicodeText.length) + ' chars)');
 
                         if (response.has_encoding_issues) {
                             $('#extraction-status').attr('class', 'badge bg-warning text-dark').text('Legacy encoding detected — ' + (response.detected_font_type || 'unknown'));
@@ -643,15 +661,16 @@
                         const font = response.detected_font_type || 'unknown';
                         $('#extraction-font').text(font === 'unknown' ? 'No legacy font' : font.charAt(0).toUpperCase() + font.slice(1));
 
-                        // Raw text: always show when legacy font detected
-                        $('#raw-text-preview').text(extractedRawText);
-                        if (response.has_encoding_issues) {
-                            $('#raw-text-preview').show();
-                            $('#toggle-raw-text').html('<i class="fas fa-eye-slash"></i> Hide Raw Text');
+                        if (response.conversion_applied) {
+                            $('#extraction-diff').attr('class', 'badge bg-success ms-1').text('lipi-aparsoft changed the text');
                         } else {
-                            $('#raw-text-preview').hide();
-                            $('#toggle-raw-text').html('<i class="fas fa-eye"></i> Show Raw (Before Conversion)');
+                            $('#extraction-diff').attr('class', 'badge bg-secondary ms-1').text('lipi-aparsoft kept the raw text');
                         }
+
+                        // Raw text: always show so the pypdf vs lipi-aparsoft comparison is explicit
+                        $('#raw-text-preview').text(extractedRawText);
+                        $('#raw-text-preview').show();
+                        $('#toggle-raw-text').html('<i class="fas fa-eye-slash"></i> Hide Raw pypdf Text');
 
                         $('#unicode-text-preview').text(extractedUnicodeText || extractedRawText);
 
@@ -673,10 +692,10 @@
             const el = $('#raw-text-preview');
             if (el.is(':visible')) {
                 el.slideUp();
-                $(this).html('<i class="fas fa-eye"></i> Show Raw (Before Conversion)');
+                $(this).html('<i class="fas fa-eye"></i> Show Raw pypdf Text');
             } else {
                 el.slideDown();
-                $(this).html('<i class="fas fa-eye-slash"></i> Hide Raw Text');
+                $(this).html('<i class="fas fa-eye-slash"></i> Hide Raw pypdf Text');
             }
         });
 
