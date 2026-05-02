@@ -2,17 +2,21 @@ import atexit
 import os
 import json
 import glob
+import sys
 from datetime import datetime
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
 from werkzeug.utils import secure_filename
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_DIR = os.path.join(BASE_DIR, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 from lipi.preprocessor import HindiPreprocessor
 from lipi.splitter import PDFSplitter
 from lipi.extractor import extract_unicode_text
 from lipi import __version__ as SERVICE_VERSION
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BASE_DIR, "temp")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
