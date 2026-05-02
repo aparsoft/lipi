@@ -120,7 +120,6 @@ profile_default/
 local_folder/
 */*/local/
 script.*
-_*.py
 !__init__.py
 !src/lipi/_quality.py
 _*.md
