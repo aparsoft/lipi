@@ -6,7 +6,7 @@ KrutiDev is a glyph-based encoding where characters are stored in visual
 used before another consonant in a conjunct.  The i-matra appears *before*
 the consonant in the encoded text but must be placed *after* in Unicode.
 
-Sources: KrutiDev 010 glyph table, NCERT PDF reverse-engineering.
+Sources: KrutiDev 010 glyph table, OLD PDF reverse-engineering.
 """
 
 KRUTIDEV_TO_UNICODE: dict[str, str] = {
