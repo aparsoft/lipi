@@ -13,11 +13,19 @@ _DUPLICATE_MARKS_RE = re.compile(r"([ँंः़ािीुूृेैोौ�
 _SPURIOUS_NUKTA_RE = re.compile(r"[क-ह](?:्)?़")
 _NONSTANDARD_NUKTA_RE = re.compile(r"[ञचछझटठतथदधनपबभमयरलवशषसहव](?:्)?़")
 _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉॅ][ँंः]?[ािीुूृेैोौॉॅ]")
+_LOOKUP_SEQUENCE_REPLACEMENTS = (
+    ("ांे", "ों"),
+    ("ाे", "ो"),
+    ("ाै", "ौ"),
+    ("ाॉ", "ॉ"),
+)
 
 
 def _normalize_lookup_token(word: str) -> str:
     """Normalize noisy tokens before lexicon lookup."""
     word = _DUPLICATE_MARKS_RE.sub(r"\1", word)
+    for pattern, replacement in _LOOKUP_SEQUENCE_REPLACEMENTS:
+        word = word.replace(pattern, replacement)
     return word.replace("़", "").replace("्", "")
 
 
@@ -150,9 +158,7 @@ class HindiLexiconCorrector:
                 if normalized[0] != candidate_normalized[0]:
                     continue
 
-                distance = _levenshtein_distance(
-                    normalized, candidate_normalized, allowed_distance
-                )
+                distance = _levenshtein_distance(normalized, candidate_normalized, allowed_distance)
                 if distance is None:
                     continue
 
@@ -167,7 +173,11 @@ class HindiLexiconCorrector:
 
                 prefix_penalty = 0 if token[:2] == candidate[:2] else 1
                 suffix_penalty = 0 if token[-1] == candidate[-1] else 1
-                score = (distance, prefix_penalty + suffix_penalty, abs(len(candidate) - len(token)))
+                score = (
+                    distance,
+                    prefix_penalty + suffix_penalty,
+                    abs(len(candidate) - len(token)),
+                )
 
                 if best_score is None or score < best_score:
                     best_candidate = candidate
