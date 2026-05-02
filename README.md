@@ -1,8 +1,9 @@
-# Lipi 
+# Lipi
 
 > **Part of the [Aparsoft](https://aparsoft.com) open-source EdTech toolchain**
 > Built for the [Apar Academy](https://aparacademy.com) Hindi PDF content ingestion pipeline - open-sourced for the Indian EdTech community.
 
+[![PyPI](https://img.shields.io/pypi/v/lipi-aparsoft)](https://pypi.org/project/lipi-aparsoft/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-orange)](https://github.com/aparsoft/lipi)
@@ -41,16 +42,16 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 
 ```bash
 # Core (PDF splitting + text extraction)
-pip install lipi
+pip install lipi-aparsoft
 
 # With PyMuPDF for better font-name-based extraction
-pip install "lipi[fitz]"
+pip install "lipi-aparsoft[fitz]"
 
 # With Flask web UI
-pip install "lipi[flask]"
+pip install "lipi-aparsoft[flask]"
 
 # Development
-pip install "lipi[dev]"
+pip install "lipi-aparsoft[dev]"
 ```
 
 Or clone and install in editable mode:
@@ -60,6 +61,11 @@ git clone https://github.com/aparsoft/lipi.git
 cd lipi
 pip install -e ".[dev]"
 ```
+
+> **Note:** The PyPI distribution name is `lipi-aparsoft`, but the Python import name remains `lipi`:
+> ```python
+> from lipi import HindiPreprocessor  # import name is always 'lipi'
+> ```
 
 ---
 
@@ -142,7 +148,7 @@ lipi info hindi.pdf
 ## Flask Web UI
 
 ```bash
-pip install "lipi[flask]"
+pip install "lipi-aparsoft[flask]"
 python web/flask_app.py
 # → http://localhost:5000
 ```

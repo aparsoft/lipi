@@ -3,11 +3,11 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lipi"
+name = "lipi-aparsoft"
 version = "1.0.0"
 description = "Legacy Hindi font (KrutiDev/Chanakya) to Unicode Devanagari toolkit with PDF splitting"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "Aparsoft Private Limited", email = "hello@aparsoft.in" },
 ]
@@ -26,7 +26,6 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Intended Audience :: Education",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",

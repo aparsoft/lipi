@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.0.0] - 2025-05-01
 
+### Changed
+- PyPI distribution name changed from `lipi` to `lipi-aparsoft` (name was taken on PyPI).
+  Install with `pip install lipi-aparsoft`; Python import name remains `lipi` (unchanged).
+
 ### Added
 - Restructured from flat `pdf_service` into `src/lipi/` package layout.
 - `lipi.preprocessor.HindiPreprocessor` — convert KrutiDev/Chanakya to Unicode.

@@ -37,6 +37,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
+> **Install from PyPI:** `pip install lipi-aparsoft`  
+> **Python import:** `from lipi import HindiPreprocessor` (import name is `lipi`, not `lipi-aparsoft`)
+
 ## Pull request guidelines
 
 - Keep PRs focused on a single change.
