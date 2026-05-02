@@ -1,7 +1,7 @@
 # Lipi
 
 > **Part of the [Aparsoft](https://aparsoft.com) open-source EdTech toolchain**
-> Built for the [Apar Academy](https://aparacademy.com) Hindi PDF content ingestion pipeline — open-sourced for the Indian EdTech community.
+> Built for the [Apar Academy](https://aparacademy.com) Hindi PDF content ingestion pipeline - open-sourced for the Indian EdTech community.
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -11,15 +11,15 @@
 
 ## What this does
 
-Two things — and only those two things, done well:
+Two things:
 
-1. **Split PDFs by page range** — extract chapters, lectures, or units out of a large PDF into separate files, with optional batch processing via a JSON config.
+1. **Split PDFs by page range** - extract chapters, lectures, or units out of a large PDF into separate files, with optional batch processing via a JSON config.
 
-2. **Extract Unicode text from legacy Hindi-font PDFs** — detect KrutiDev / Chanakya encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
+2. **Extract Unicode text from legacy Hindi-font PDFs** - detect KrutiDev / Chanakya encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
 
 ### Why this exists
 
-Old legacy Hindi textbooks, state board materials, government circulars, and Hindi newspapers were typeset in **glyph-substitution fonts** like KrutiDev and Chanakya *before* Unicode became the standard.  These PDFs *look* correct in a viewer but the underlying bytes are ASCII — not Devanagari.  When you extract text with any standard library (`pypdf`, `pdfplumber`, `pdfminer`) you get gibberish like `osQ kjk Fk Hk`.
+Old legacy Hindi textbooks, state board materials, government circulars, and Hindi newspapers were typeset in **glyph-substitution fonts** like KrutiDev and Chanakya *before* Unicode became the standard.  These PDFs *look* correct in a viewer but the underlying bytes are ASCII - not Devanagari.  When you extract text with any standard library (`pypdf`, `pdfplumber`, `pdfminer`) you get gibberish like `osQ kjk Fk Hk`.
 
 This toolkit detects that situation and applies a character-level reverse-mapping to give you usable Hindi text.
 
@@ -237,4 +237,4 @@ MIT © [Aparsoft Private Limited](https://aparsoft.com)
 
 ---
 
-*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparsoft.com) delivers Hindi curriculum-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
+*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparailms.com) delivers Hindi curriculum-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
