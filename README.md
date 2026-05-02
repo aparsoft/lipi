@@ -35,6 +35,7 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 | **Conversion is ~85-92% accurate** | KrutiDev glyph mapping is context-free. Some characters (e.g. `k`) can be the `ा` matra *or* part of a consonant cluster. Perfect accuracy requires a context-aware parser or an LLM correction pass. |
 | **PDF fonts are NOT re-encoded** | `split_pdf()` copies pages byte-for-byte. The output PDFs will still render correctly in viewers, but the underlying bytes remain in the legacy encoding. Use `extract_unicode_text()` when you need the text, not the file. |
 | **Chanakya support is partial** | The Chanakya mapping covers the most common characters. Documents using uncommon ligatures or regional variants may need manual review. |
+| **Second-stage correction is heuristic** | The optional lexicon pass is off by default and only runs on legacy-detected extraction paths. It can improve noisy KrutiDev output, but it is still a heuristic layer and should be reviewed on important documents. |
 
 ---
 
@@ -90,6 +91,26 @@ result = extract_unicode_text("old_hindi_textbook.pdf")
 print(result["has_encoding_issues"])   # True
 print(result["detected_font_type"])    # "krutidev"
 print(result["full_text"][:500])       # Clean Devanagari Unicode
+
+# Optional second-stage lexicon correction for legacy-detected PDFs
+improved = extract_unicode_text(
+        "old_hindi_textbook.pdf",
+        second_stage="lexicon",
+)
+print(improved["correction_stats"])
+```
+
+### Run the regression harness over real samples
+
+```python
+from lipi.regression import run_regression_harness
+
+report = run_regression_harness([
+        "temp/jhkr102.pdf",
+        "temp/ihkr101.pdf",
+])
+print(report["improved_pages"])
+print(report["average_quality_delta"])
 ```
 
 ### Split a PDF
@@ -127,6 +148,9 @@ has_issues, font_type = HindiPreprocessor.detect_encoding(raw_text)
 # Extract text from a PDF
 lipi extract hindi.pdf
 
+# Extract with optional second-stage lexicon correction
+lipi extract hindi.pdf --second-stage lexicon
+
 # Extract with JSON output
 lipi extract hindi.pdf --json
 
@@ -138,6 +162,12 @@ lipi split book.pdf --ranges "1-20:Ch1,21-45:Ch2" --output-dir chapters/
 
 # Show PDF info
 lipi info hindi.pdf
+
+# Benchmark one or more PDFs page-by-page
+lipi regress temp/jhkr102.pdf temp/ihkr101.pdf
+
+# Opt in to a more aggressive contextual lexicon built from repeated clean tokens
+lipi regress temp/jhkr102.pdf --bootstrap-lexicon
 ```
 
 ---
@@ -168,9 +198,12 @@ lipi/
 │   ├── __init__.py              # Public API (HindiPreprocessor)
 │   ├── preprocessor.py          # Convert + detect + post-process
 │   ├── extractor.py             # PDF text extraction (pypdf)
+│   ├── correction.py            # Optional lexicon-based second stage
+│   ├── regression.py            # Page-by-page quality harness
 │   ├── splitter.py              # PDF splitting + batch processing
 │   ├── cli.py                   # Command-line interface
 │   ├── _quality.py              # Garbage text detection
+│   ├── _lexicon.py              # Bundled Hindi lexicon for correction
 │   └── mappings/
 │       ├── __init__.py          # FONT_MAPPINGS merged dict
 │       ├── krutidev.py          # KrutiDev → Unicode base table
@@ -183,6 +216,8 @@ lipi/
 │   ├── test_mappings.py
 │   ├── test_preprocessor.py
 │   ├── test_extractor.py
+│   ├── test_correction.py
+│   ├── test_regression.py
 │   └── test_splitter.py
 ├── pyproject.toml
 └── README.md
@@ -206,6 +241,9 @@ convert()   <- longest-match-first substitution using char mapping table
         |
         v
 post_process()  <- removes doubled matras, fixes common word errors
+        |
+        v
+lexicon second stage (optional)  <- conservative lexicon-guided cleanup on legacy paths only
         |
         v
 Unicode text: "के ारा थ कर रहा है"  <- ~85-92% accuracy
