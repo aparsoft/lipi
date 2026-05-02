@@ -33,6 +33,17 @@ _IMATRA_REORDER_RE = re.compile(
     + _IMATRA
     + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
 )
+_DEVA_MARKS = "\u093c\u0901\u0902\u0903\u093e\u093f\u0940\u0941\u0942\u0943\u0947\u0948\u0949\u094b\u094c\u094d"
+_MARK_SPACING_RE = re.compile(f"([\u0900-\u097f])\\s+([{_DEVA_MARKS}])")
+_HALANT_SPACING_RE = re.compile(r"(्)\s+([\u0900-\u097f])")
+_DUPLICATE_CONSONANT_I_RE = re.compile(rf"([{_CONS_RANGE}])\1(?=[{_CONS_RANGE}]|[\u0901\u0902\u0903])")
+_SHCHA_IMATRA_RE = re.compile(r"श्श्ि")
+_NUKTA_BASE_RE = re.compile(r"([डढ])\1़")
+
+_NUKTA_I_REPLACEMENTS = {
+    "ड": "ड़",
+    "ढ": "ढ़",
+}
 
 
 def _reorder_imatra(match: re.Match) -> str:
@@ -41,6 +52,11 @@ def _reorder_imatra(match: re.Match) -> str:
         return match.group(1) + _IMATRA_ANUSVARA
     else:
         return match.group(2) + _IMATRA
+
+
+def _fix_decomposed_nukta_i(match: re.Match) -> str:
+    """Repair decomposed nukta forms where the i-matra is dropped."""
+    return _NUKTA_I_REPLACEMENTS[match.group(1)] + _IMATRA
 
 
 class HindiPreprocessor:
@@ -176,6 +192,13 @@ class HindiPreprocessor:
         """
         if not text:
             return text
+
+        # PDFs often insert spaces before dependent vowel signs or after halant.
+        text = _MARK_SPACING_RE.sub(r"\1\2", text)
+        text = _HALANT_SPACING_RE.sub(r"\1\2", text)
+        text = _DUPLICATE_CONSONANT_I_RE.sub(r"\1ि", text)
+        text = _SHCHA_IMATRA_RE.sub("श्चि", text)
+        text = _NUKTA_BASE_RE.sub(_fix_decomposed_nukta_i, text)
 
         corrections = [
             # -- Remove doubled matras --
