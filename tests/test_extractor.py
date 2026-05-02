@@ -1,8 +1,13 @@
 """Unit tests for lipi.extractor and lipi._quality."""
 
+from pathlib import Path
+
 import pytest
 from lipi._quality import is_garbage_text
 from lipi.extractor import extract_unicode_text
+
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestIsGarbageText:
@@ -57,3 +62,24 @@ class TestExtractUnicodeText:
         # Just verify it doesn't crash
         result = extract_unicode_text("/nonexistent/file.pdf", font_type="none")
         assert isinstance(result, dict)
+
+    def test_unknown_font_still_applies_generic_cleanup(self):
+        pdf_path = ROOT / "temp" / "ihkr101.pdf"
+
+        raw = extract_unicode_text(
+            str(pdf_path),
+            page_range=(1, 1),
+            font_type="none",
+            post_process=False,
+        )
+        cleaned = extract_unicode_text(
+            str(pdf_path),
+            page_range=(1, 1),
+            font_type="auto",
+            post_process=True,
+        )
+
+        assert cleaned["has_encoding_issues"] is False
+        assert raw["pages"][1] != cleaned["pages"][1]
+        assert "पश्श्िम" in raw["pages"][1]
+        assert "पश्चिम" in cleaned["pages"][1]
