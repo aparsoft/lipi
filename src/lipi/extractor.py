@@ -104,6 +104,12 @@ def extract_unicode_text(
             if font_type == "auto":
                 font_type = detected_font
 
+            should_apply_second_stage = second_stage == "lexicon" and font_type not in (
+                "unknown",
+                "none",
+            )
+            result["second_stage_applied"] = should_apply_second_stage
+
             pages_text: Dict[int, str] = {}
             for pg_idx in range(start_0, end_0):
                 page_num = pg_idx + 1
@@ -120,7 +126,7 @@ def extract_unicode_text(
 
                 pages_text[page_num] = raw
 
-            if second_stage == "lexicon":
+            if should_apply_second_stage:
                 corrector = HindiLexiconCorrector(lexicon_path=lexicon_path)
                 contextual_words = set()
                 if bootstrap_lexicon:
@@ -139,6 +145,12 @@ def extract_unicode_text(
 
                 result["page_correction_stats"] = page_correction_stats
                 result["correction_stats"] = _summarize_correction_stats(page_correction_stats)
+            elif second_stage == "lexicon":
+                result["correction_stats"] = {
+                    "corrected_tokens": 0,
+                    "tokens_considered": 0,
+                    "corrections": [],
+                }
 
             result["pages"] = pages_text
             result["processed_pages"] = len(pages_text)
