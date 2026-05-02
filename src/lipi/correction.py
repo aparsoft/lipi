@@ -97,7 +97,7 @@ class HindiLexiconCorrector:
         self,
         lexicon_words: Optional[Iterable[str]] = None,
         lexicon_path: Optional[str] = None,
-        max_distance: int = 3,
+        max_distance: int = 2,
     ) -> None:
         self.max_distance = max_distance
         self.lexicon: Set[str] = set(lexicon_words or load_lexicon_words(lexicon_path))
