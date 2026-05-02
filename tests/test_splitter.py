@@ -132,10 +132,10 @@ class TestSplitPdf:
             pdf_path,
             output_dir,
             [(1, 5, "All")],
-            prefix="NCERT",
+            prefix="HindiPDF",
         )
         assert len(files) == 1
-        assert "NCERT" in os.path.basename(files[0])
+        assert "HindiPDF" in os.path.basename(files[0])
 
     def test_split_skips_invalid_range(self, tmp_path):
         pdf_path = str(tmp_path / "test.pdf")
