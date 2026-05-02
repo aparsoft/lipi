@@ -336,7 +336,7 @@ if app_mode == "Single PDF Splitter":
                 if use_prefix:
                     col1, col2 = st.columns(2)
                     with col1:
-                        prefix = st.text_input("Prefix", "NCERT")
+                        prefix = st.text_input("Prefix", "HindiPDF")
                     with col2:
                         unit_name = st.text_input("Unit Name", "English")
 
@@ -395,7 +395,7 @@ if app_mode == "Single PDF Splitter":
             if use_prefix:
                 col1, col2 = st.columns(2)
                 with col1:
-                    prefix = st.text_input("Prefix", "NCERT")
+                    prefix = st.text_input("Prefix", "HindiPDF")
                 with col2:
                     unit_name = st.text_input("Unit Name", "English")
 
@@ -543,7 +543,7 @@ elif app_mode == "Configuration Editor":
             "default": {
                 "page_ranges": [{"start": 1, "end": 5, "name": "Introduction"}],
                 "unit_name": "Default",
-                "prefix": "NCERT",
+                "prefix": "HindiPDF",
             }
         }
 
@@ -676,7 +676,7 @@ elif app_mode == "Configuration Editor":
             st.session_state.config["default"] = {
                 "page_ranges": [{"start": 1, "end": 10, "name": "Default"}],
                 "unit_name": "Default",
-                "prefix": "NCERT",
+                "prefix": "HindiPDF",
             }
             st.rerun()
 
