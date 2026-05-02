@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `lipi._quality.is_garbage_text()` — text quality gate for extraction results.
 - `lipi.mappings` — split mapping tables: krutidev, chanakya, walkman_chanakya.
 - `web/flask_app.py` — Flask web UI using lipi package.
-- Backward-compat shims for `hindi_preprocessor.py` and `pdf_cutter_service.py`.
+- Backward-compat shims for `hindi_preprocessor.py` and `pdf_service.py`.
 - 71 unit tests covering mappings, preprocessor, extractor, and splitter.
 - Walkman-Chanakya905 font support (multi-char tokens + single-char overrides).
 
