@@ -49,6 +49,7 @@ def test_extract_pdf_text_explains_unchanged_output_for_nonlegacy_pdf():
     assert response.status_code == 200
     assert payload["success"] is True
     assert payload["has_encoding_issues"] is False
-    assert payload["raw_equals_corrected"] is True
-    assert payload["conversion_applied"] is False
-    assert "matches the raw pypdf extraction" in payload["extraction_summary"]
+    assert payload["raw_equals_corrected"] is False
+    assert payload["conversion_applied"] is True
+    assert payload["legacy_conversion_applied"] is False
+    assert "generic Unicode cleanup" in payload["extraction_summary"]
