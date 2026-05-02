@@ -1,4 +1,4 @@
-# Lipi
+# Lipi 
 
 > **Part of the [Aparsoft](https://aparsoft.com) open-source EdTech toolchain**
 > Built for the [Apar Academy](https://aparacademy.com) Hindi PDF content ingestion pipeline - open-sourced for the Indian EdTech community.
@@ -8,6 +8,8 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-orange)](https://github.com/aparsoft/lipi)
 
 ---
+
+## Decode legacy Hindi/Indic PDFs. KrutiDev, Chanakya → Unicode.
 
 ## What this does
 
