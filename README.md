@@ -1,11 +1,11 @@
-# Aparsoft PDF Tools
+# Lipi
 
-> **Part of the [Aparsoft](https://aparsoft.in) open-source EdTech toolchain**  
+> **Part of the [Aparsoft](https://aparsoft.in) open-source EdTech toolchain**
 > Built for the [Apar Academy](https://aparacademy.in) NCERT content pipeline — open-sourced for the Indian EdTech community.
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2.0-orange)](https://github.com/aparsoft/aparsoft-pdf-tools)
+[![Version](https://img.shields.io/badge/version-1.0.0-orange)](https://github.com/aparsoft/lipi)
 
 ---
 
@@ -15,7 +15,7 @@ Two things — and only those two things, done well:
 
 1. **Split PDFs by page range** — extract chapters, lectures, or units out of a large PDF into separate files, with optional batch processing via a JSON config.
 
-2. **Extract Unicode text from legacy Hindi-font PDFs** — detect KrutiDev / Chanakya / DevLys encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
+2. **Extract Unicode text from legacy Hindi-font PDFs** — detect KrutiDev / Chanakya encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
 
 ### Why this exists
 
@@ -25,14 +25,13 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 
 ---
 
-## ⚠️ Known Limitations (read before raising issues)
+## Known Limitations
 
 | Limitation | Detail |
 |---|---|
-| **Conversion is ~85–92 % accurate** | KrutiDev glyph mapping is context-free. Some characters (e.g. `k`) can be the `ा` matra *or* part of a consonant cluster. Perfect accuracy requires a context-aware parser or an LLM correction pass. |
+| **Conversion is ~85-92% accurate** | KrutiDev glyph mapping is context-free. Some characters (e.g. `k`) can be the `ा` matra *or* part of a consonant cluster. Perfect accuracy requires a context-aware parser or an LLM correction pass. |
 | **PDF fonts are NOT re-encoded** | `split_pdf()` copies pages byte-for-byte. The output PDFs will still render correctly in viewers, but the underlying bytes remain in the legacy encoding. Use `extract_unicode_text()` when you need the text, not the file. |
 | **Chanakya support is partial** | The Chanakya mapping covers the most common characters. Documents using uncommon ligatures or regional variants may need manual review. |
-| **DevLys / Shusha / Walkman** | Not yet supported. PRs welcome. |
 
 ---
 
@@ -40,39 +39,60 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 
 ```bash
 # Core (PDF splitting + text extraction)
-pip install aparsoft-pdf-tools
+pip install lipi
+
+# With PyMuPDF for better font-name-based extraction
+pip install "lipi[fitz]"
 
 # With Flask web UI
-pip install "aparsoft-pdf-tools[flask]"
+pip install "lipi[flask]"
 
-# With better Hindi transliteration (recommended)
-pip install "aparsoft-pdf-tools[indic]"
-
-# Everything
-pip install "aparsoft-pdf-tools[all]"
+# Development
+pip install "lipi[dev]"
 ```
 
 Or clone and install in editable mode:
 
 ```bash
-git clone https://github.com/aparsoft/aparsoft-pdf-tools.git
-cd aparsoft-pdf-tools
-pip install -e ".[all]"
+git clone https://github.com/aparsoft/lipi.git
+cd lipi
+pip install -e ".[dev]"
 ```
 
 ---
 
 ## Quick Start
 
+### Extract Unicode text from a Hindi PDF
+
+```python
+from lipi import HindiPreprocessor
+
+# Convert raw KrutiDev text
+unicode_text = HindiPreprocessor.convert("osQ kjk Fk", font_type="krutidev")
+print(unicode_text)  # के ारा थ
+
+# Auto-detect and convert
+result = HindiPreprocessor.correct_hindi_text("eSaus gSjku gksdj ns[kk")
+```
+
+### Extract from a PDF
+
+```python
+from lipi.extractor import extract_unicode_text
+
+result = extract_unicode_text("old_hindi_textbook.pdf")
+print(result["has_encoding_issues"])   # True
+print(result["detected_font_type"])    # "krutidev"
+print(result["full_text"][:500])       # Clean Devanagari Unicode
+```
+
 ### Split a PDF
 
 ```python
-from pdf_cutter_service import PDFCutterService
+from lipi.splitter import PDFSplitter
 
-svc = PDFCutterService()
-
-# Split a textbook into chapters
-svc.split_pdf(
+PDFSplitter.split_pdf(
     input_file  = "ncert_science_class10.pdf",
     output_dir  = "chapters/",
     page_ranges = [
@@ -83,76 +103,36 @@ svc.split_pdf(
     prefix    = "NCERT_Sci10",
     unit_name = "Science",
 )
-# → chapters/NCERT_Sci10_Science_Chapter1_ChemicalReactions.pdf
-# → chapters/NCERT_Sci10_Science_Chapter2_Acids.pdf
-# → ...
 ```
 
-### Extract Unicode text from a Hindi PDF
+### Detect encoding
 
 ```python
-from pdf_cutter_service import PDFCutterService
+from lipi import HindiPreprocessor
 
-svc = PDFCutterService()
-result = svc.extract_unicode_text("old_hindi_textbook.pdf")
-
-print(result["has_encoding_issues"])   # True
-print(result["detected_font_type"])    # "krutidev"
-print(result["full_text"][:500])       # Clean Devanagari Unicode ✓
-
-# Access page-by-page
-for page_num, text in result["pages"].items():
-    print(f"Page {page_num}:\n{text}\n")
-```
-
-### Detect encoding issues without converting
-
-```python
-from pdf_cutter_service import PDFCutterService
-
-has_issues, font_type = PDFCutterService.detect_encoding_issues(raw_text)
+has_issues, font_type = HindiPreprocessor.detect_encoding(raw_text)
 # → (True, "krutidev")
-```
-
-### Batch extract from a directory
-
-```python
-results = svc.batch_extract_unicode_text("./hindi_pdfs/")
-for r in results:
-    print(r["filename"], "→", r["detected_font_type"])
-    # Save unicode text somewhere useful
-    with open(f"unicode/{r['filename']}.txt", "w") as f:
-        f.write(r["full_text"])
 ```
 
 ---
 
-## CLI (command line)
+## CLI
 
 ```bash
-# Start the HTTP API service (watches a directory + exposes REST endpoints)
-aparsoft-pdf --watch-dir ./input --output-dir ./output --config config.json
+# Extract text from a PDF
+lipi extract hindi.pdf
 
-# API-only mode on a specific port
-aparsoft-pdf --output-dir ./output --port 8111
-```
+# Extract with JSON output
+lipi extract hindi.pdf --json
 
-### API endpoints
+# Extract specific pages
+lipi extract hindi.pdf --page-range 1-10
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/status` | Service health and stats |
-| `GET` | `/help` | Endpoint reference |
-| `POST` | `/split` | Split a PDF (`input_file`, `ranges`, `output_dir`) |
-| `POST` | `/extract_text` | Extract Unicode text (`pdf_path`, `font_type`) |
-| `POST` | `/correct_text` | Convert raw KrutiDev text to Unicode |
+# Split a PDF
+lipi split book.pdf --ranges "1-20:Ch1,21-45:Ch2" --output-dir chapters/
 
-```bash
-# Example: split via curl
-curl -X POST "http://localhost:8111/split?input_file=book.pdf&ranges=1-20:Ch1,21-45:Ch2&output_dir=out"
-
-# Example: extract text
-curl -X POST "http://localhost:8111/extract_text?pdf_path=hindi.pdf&font_type=auto"
+# Show PDF info
+lipi info hindi.pdf
 ```
 
 ---
@@ -160,7 +140,8 @@ curl -X POST "http://localhost:8111/extract_text?pdf_path=hindi.pdf&font_type=au
 ## Flask Web UI
 
 ```bash
-python flask_app.py
+pip install "lipi[flask]"
+python web/flask_app.py
 # → http://localhost:5000
 ```
 
@@ -174,54 +155,32 @@ Features:
 
 ---
 
-## Batch config format
-
-```json
-{
-  "ncert_hindi_class9": {
-    "page_ranges": [
-      { "start": 1,  "end": 20, "name": "Chapter1" },
-      { "start": 21, "end": 45, "name": "Chapter2" },
-      { "start": 46, "end": 70, "name": "Chapter3" }
-    ],
-    "prefix": "NCERT",
-    "unit_name": "Hindi9"
-  },
-  "default": {
-    "page_ranges": [
-      { "start": 1, "end": 50, "name": "Part1" }
-    ]
-  }
-}
-```
-
-- Key = PDF filename **without** extension, or a regex pattern (`^pattern$`), or `"default"`.
-- `prefix` and `unit_name` are optional; they appear in the output filename.
-- Output filename pattern: `{prefix}_{unit_name}_{name}.pdf`
-
----
-
 ## Project structure
 
 ```
-aparsoft-pdf-tools/
-├── pdf_cutter_service.py   # Core library + HTTP service + CLI
-├── flask_app.py            # Flask web UI
-├── pyproject.toml          # Package metadata
-├── README.md
-├── LICENSE
+lipi/
+├── src/lipi/
+│   ├── __init__.py              # Public API (HindiPreprocessor)
+│   ├── preprocessor.py          # Convert + detect + post-process
+│   ├── extractor.py             # PDF text extraction (pypdf + optional fitz)
+│   ├── splitter.py              # PDF splitting + batch processing
+│   ├── cli.py                   # Command-line interface
+│   ├── _quality.py              # Garbage text detection
+│   └── mappings/
+│       ├── __init__.py          # FONT_MAPPINGS merged dict
+│       ├── krutidev.py          # KrutiDev → Unicode base table
+│       ├── chanakya.py          # Chanakya → Unicode table
+│       └── walkman_chanakya.py  # Walkman-Chanakya905 overrides
+├── web/
+│   ├── flask_app.py             # Flask web UI
+│   └── templates/               # HTML templates
 ├── tests/
-│   ├── test_splitting.py
-│   ├── test_encoding.py
-│   └── fixtures/
-│       ├── sample_krutidev.pdf
-│       └── sample_unicode.pdf
-├── templates/              # Flask Jinja2 templates (not included in core)
-│   ├── index.html
-│   ├── single_pdf.html
-│   ├── batch_process.html
-│   └── config_editor.html
-└── config.example.json
+│   ├── test_mappings.py
+│   ├── test_preprocessor.py
+│   ├── test_extractor.py
+│   └── test_splitter.py
+├── pyproject.toml
+└── README.md
 ```
 
 ---
@@ -230,43 +189,35 @@ aparsoft-pdf-tools/
 
 ```
 PDF file (KrutiDev font)
-        │
-        ▼
-pypdf.extract_text()   ← returns garbled ASCII: "osQ kjk Fk dj jgk gS"
-        │
-        ▼
-detect_encoding_issues()  ← heuristic: low Devanagari ratio + KrutiDev fingerprints
-        │
-        ▼
-convert_to_unicode()   ← longest-match-first substitution using char mapping table
-        │
-        ▼
-post_process_hindi_text()  ← removes doubled matras, fixes common word errors
-        │
-        ▼
-Unicode text: "के ारा थ कर रहा है"  ← ~85–92% accuracy
+        |
+        v
+pypdf.extract_text()   <- returns garbled ASCII: "osQ kjk Fk dj jgk gS"
+        |
+        v
+detect_encoding()  <- heuristic: low Devanagari ratio + KrutiDev fingerprints
+        |
+        v
+convert()   <- longest-match-first substitution using char mapping table
+        |
+        v
+post_process()  <- removes doubled matras, fixes common word errors
+        |
+        v
+Unicode text: "के ारा थ कर रहा है"  <- ~85-92% accuracy
 ```
-
-For higher accuracy, pipe the output through an LLM correction step or `indic-transliteration`.
 
 ---
 
 ## Contributing
 
-PRs are welcome, especially for:
-
-- [ ] Improved KrutiDev mapping (context-aware parser)
-- [ ] DevLys / Shusha / Walkman Chanakya support
-- [ ] Test fixtures (sample PDFs with known encoding)
-- [ ] Flask template HTML files
-- [ ] CI/CD workflow (GitHub Actions)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on adding font mappings and contributing code.
 
 ### Development setup
 
 ```bash
-git clone https://github.com/aparsoft/aparsoft-pdf-tools.git
-cd aparsoft-pdf-tools
-pip install -e ".[all,dev]"
+git clone https://github.com/aparsoft/lipi.git
+cd lipi
+pip install -e ".[dev]"
 pytest
 ```
 
@@ -275,7 +226,6 @@ pytest
 ## Acknowledgements
 
 - Built on [`pypdf`](https://github.com/py-pdf/pypdf) for PDF manipulation
-- [`indic-transliteration`](https://github.com/indic-transliteration/indic_transliteration_py) for optional HK-scheme conversion
 - KrutiDev mapping tables cross-referenced against community resources at [rajbhasha.net](https://rajbhasha.net)
 - Inspired by countless developers who hit the "Hindi PDF gibberish" problem on GitHub Issues and Stack Overflow
 
