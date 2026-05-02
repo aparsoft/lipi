@@ -11,6 +11,7 @@ from lipi._lexicon import DEFAULT_HINDI_LEXICON
 _WORD_RE = re.compile(r"[\u0900-\u0963\u0970-\u097f]+")
 _DUPLICATE_MARKS_RE = re.compile(r"([ँंः़ािीुूृेैोौ्])\1+")
 _SPURIOUS_NUKTA_RE = re.compile(r"[क-ह](?:्)?़")
+_NONSTANDARD_NUKTA_RE = re.compile(r"[ञचछझटठतथदधनपबभमयरलवशषसहव](?:्)?़")
 _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉॅ][ँंः]?[ािीुूृेैोौॉॅ]")
 
 
@@ -155,6 +156,9 @@ class HindiLexiconCorrector:
                 if distance is None:
                     continue
 
+                if _NONSTANDARD_NUKTA_RE.search(token) and token[-1] != candidate[-1]:
+                    continue
+
                 if distance > 1:
                     shares_prefix = normalized[:2] == candidate_normalized[:2]
                     shares_suffix = normalized[-3:] == candidate_normalized[-3:]
@@ -180,7 +184,7 @@ class HindiLexiconCorrector:
         if len(token) < min_token_length or token in self.lexicon:
             return False
         return bool(
-            _SPURIOUS_NUKTA_RE.search(token)
+            _NONSTANDARD_NUKTA_RE.search(token)
             or _DUPLICATE_MARKS_RE.search(token)
             or _SUSPICIOUS_MARK_SEQUENCE_RE.search(token)
         )
