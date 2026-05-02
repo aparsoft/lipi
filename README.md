@@ -44,9 +44,6 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 # Core (PDF splitting + text extraction)
 pip install lipi-aparsoft
 
-# With PyMuPDF for better font-name-based extraction
-pip install "lipi-aparsoft[fitz]"
-
 # With Flask web UI
 pip install "lipi-aparsoft[flask]"
 
@@ -170,7 +167,7 @@ lipi/
 ├── src/lipi/
 │   ├── __init__.py              # Public API (HindiPreprocessor)
 │   ├── preprocessor.py          # Convert + detect + post-process
-│   ├── extractor.py             # PDF text extraction (pypdf + optional fitz)
+│   ├── extractor.py             # PDF text extraction (pypdf)
 │   ├── splitter.py              # PDF splitting + batch processing
 │   ├── cli.py                   # Command-line interface
 │   ├── _quality.py              # Garbage text detection
