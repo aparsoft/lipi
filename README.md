@@ -1,7 +1,7 @@
 # Lipi
 
 > **Part of the [Aparsoft](https://aparsoft.in) open-source EdTech toolchain**
-> Built for the [Apar Academy](https://aparacademy.in) NCERT content pipeline — open-sourced for the Indian EdTech community.
+> Built for the [Apar Academy](https://aparacademy.in) Hindi PDF content ingestion pipeline — open-sourced for the Indian EdTech community.
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -19,7 +19,7 @@ Two things — and only those two things, done well:
 
 ### Why this exists
 
-Old NCERT textbooks, state board materials, government circulars, and Hindi newspapers were typeset in **glyph-substitution fonts** like KrutiDev and Chanakya *before* Unicode became the standard.  These PDFs *look* correct in a viewer but the underlying bytes are ASCII — not Devanagari.  When you extract text with any standard library (`pypdf`, `pdfplumber`, `pdfminer`) you get gibberish like `osQ kjk Fk Hk`.
+Old legacy Hindi textbooks, state board materials, government circulars, and Hindi newspapers were typeset in **glyph-substitution fonts** like KrutiDev and Chanakya *before* Unicode became the standard.  These PDFs *look* correct in a viewer but the underlying bytes are ASCII — not Devanagari.  When you extract text with any standard library (`pypdf`, `pdfplumber`, `pdfminer`) you get gibberish like `osQ kjk Fk Hk`.
 
 This toolkit detects that situation and applies a character-level reverse-mapping to give you usable Hindi text.
 
@@ -93,14 +93,14 @@ print(result["full_text"][:500])       # Clean Devanagari Unicode
 from lipi.splitter import PDFSplitter
 
 PDFSplitter.split_pdf(
-    input_file  = "ncert_science_class10.pdf",
+    input_file  = "hindi_science_class10.pdf",
     output_dir  = "chapters/",
     page_ranges = [
         (1,  18, "Chapter1_ChemicalReactions"),
         (19, 40, "Chapter2_Acids"),
         (41, 65, "Chapter3_Metals"),
     ],
-    prefix    = "NCERT_Sci10",
+    prefix    = "HindiPDF_Sci10",
     unit_name = "Science",
 )
 ```
@@ -237,4 +237,4 @@ MIT © [Aparsoft Private Limited](https://aparsoft.in)
 
 ---
 
-*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparsoft.in) delivers NCERT-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
+*Aparsoft builds AI-powered EdTech tools for Indian schools and students. Our flagship product [Apar AI LMS](https://aparsoft.in) delivers Hindi curriculum-aligned content to schools across India. This toolkit is part of our internal content processing pipeline, open-sourced for the community.*
