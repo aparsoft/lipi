@@ -42,9 +42,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-fitz = [
-  "PyMuPDF>=1.24.0",
-]
 flask = [
   "Flask>=3.0.0",
   "watchdog>=3.0.0",
