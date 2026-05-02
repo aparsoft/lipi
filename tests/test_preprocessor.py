@@ -119,6 +119,20 @@ class TestPostProcess:
     def test_ek_nukta_correction(self):
         assert HindiPreprocessor.post_process("एक़") == "एक"
 
+    def test_repairs_split_marks_and_conjuncts(self):
+        assert HindiPreprocessor.post_process("प्रस् त ुत") == "प्रस्तुत"
+        assert HindiPreprocessor.post_process("स् क ूल") == "स्कूल"
+
+    def test_repairs_duplicate_consonant_imatra_patterns(self):
+        assert HindiPreprocessor.post_process("कक ं") == "किं"
+        assert HindiPreprocessor.post_process("ववक") == "विक"
+        assert HindiPreprocessor.post_process("णणय") == "णिय"
+        assert HindiPreprocessor.post_process("ससय") == "सिय"
+
+    def test_repairs_generic_conjunct_and_nukta_patterns(self):
+        assert HindiPreprocessor.post_process("श्श्िम") == "श्चिम"
+        assert HindiPreprocessor.post_process("डड़त") == "ड़ित"
+
     def test_empty_string(self):
         assert HindiPreprocessor.post_process("") == ""
 
