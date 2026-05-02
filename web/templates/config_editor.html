@@ -1,0 +1,456 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<style>
+    .pattern-item {
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #0d6efd;
+        padding-left: 1rem;
+    }
+    .range-item {
+        margin-bottom: 0.5rem;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 0.5rem;
+    }
+    pre#config-json {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 4px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0">Configuration Editor</h2>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-12">
+                <!-- Configuration File Path -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Configuration File</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="config_path" class="form-label">Configuration File Path</label>
+                                    <input type="text" class="form-control" id="config_path" value="{{ config_path }}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="d-grid gap-2">
+                                        <button id="load-config-btn" class="btn btn-primary">Load</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Editor -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Edit Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="patterns-container">
+                            <!-- Pattern items will be added here -->
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button id="add-pattern-btn" class="btn btn-outline-primary">
+                                <i class="fas fa-plus"></i> Add Pattern
+                            </button>
+                            
+                            {% if 'default' not in config %}
+                            <button id="add-default-btn" class="btn btn-outline-success">
+                                <i class="fas fa-plus"></i> Add Default Configuration
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- JSON Preview -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Configuration JSON</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="config-json"></pre>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                            <button id="save-config-btn" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Template (hidden) -->
+<template id="pattern-template">
+    <div class="pattern-item">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="mb-2">
+                    <label class="form-label">Pattern Type</label>
+                    <select class="form-select pattern-type">
+                        <option value="exact">Exact Filename</option>
+                        <option value="regex">Regex Pattern</option>
+                        <option value="default">Default</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-6 pattern-name-container">
+                <div class="mb-2">
+                    <label class="form-label">Pattern Name</label>
+                    <input type="text" class="form-control pattern-name" placeholder="e.g., ncert_hindi_class9">
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="mb-2">
+                    <label class="form-label">Unit Name</label>
+                    <input type="text" class="form-control unit-name" placeholder="e.g., Hindi">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-2">
+                    <label class="form-label">Prefix</label>
+                    <input type="text" class="form-control prefix" placeholder="e.g., NCERT">
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Page Ranges</label>
+            <div class="ranges-container">
+                <!-- Range items will be added here -->
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-2">
+                <button class="btn btn-sm btn-outline-primary add-range-btn">
+                    <i class="fas fa-plus"></i> Add Range
+                </button>
+                <button class="btn btn-sm btn-outline-danger remove-pattern-btn">
+                    <i class="fas fa-trash"></i> Remove Pattern
+                </button>
+            </div>
+        </div>
+        
+        <hr>
+    </div>
+</template>
+
+<!-- Range Template (hidden) -->
+<template id="range-template">
+    <div class="range-item">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="mb-2">
+                    <label class="form-label">Start Page</label>
+                    <input type="number" class="form-control start-page" min="1" value="1">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="mb-2">
+                    <label class="form-label">End Page</label>
+                    <input type="number" class="form-control end-page" min="1" value="10">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mb-2">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control range-name" placeholder="e.g., Chapter1">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="mb-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-danger form-control remove-range-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script id="initial-config" type="application/json">{{ config | tojson | safe }}</script>
+<script>
+    $(document).ready(function() {
+        // Initialize configuration object from server-rendered JSON
+        let configData = JSON.parse(document.getElementById('initial-config').textContent);
+        
+        // Update JSON preview
+        function updateJsonPreview() {
+            $('#config-json').text(JSON.stringify(configData, null, 2));
+        }
+        
+        // Render patterns from config data
+        function renderPatterns() {
+            $('#patterns-container').empty();
+            
+            // Sort keys to put 'default' first
+            const keys = Object.keys(configData).sort((a, b) => {
+                if (a === 'default') return -1;
+                if (b === 'default') return 1;
+                return a.localeCompare(b);
+            });
+            
+            keys.forEach(function(key) {
+                const patternData = configData[key];
+                addPatternToUI(key, patternData);
+            });
+            
+            updateJsonPreview();
+        }
+        
+        // Add a pattern to the UI
+        function addPatternToUI(key, patternData) {
+            const template = document.getElementById('pattern-template');
+            const clone = document.importNode(template.content, true);
+            
+            // Set pattern type and name
+            let patternType = 'exact';
+            if (key === 'default') {
+                patternType = 'default';
+            } else if (key.startsWith('^') && key.endsWith('$')) {
+                patternType = 'regex';
+            }
+            
+            $(clone).find('.pattern-type').val(patternType);
+            
+            if (patternType === 'default') {
+                $(clone).find('.pattern-name-container').hide();
+            } else {
+                $(clone).find('.pattern-name').val(key);
+            }
+            
+            // Set unit name and prefix
+            $(clone).find('.unit-name').val(patternData.unit_name || '');
+            $(clone).find('.prefix').val(patternData.prefix || '');
+            
+            // Add ranges
+            const rangesContainer = $(clone).find('.ranges-container');
+            
+            if (patternData.page_ranges) {
+                patternData.page_ranges.forEach(function(range) {
+                    addRangeToUI(rangesContainer, range);
+                });
+            }
+            
+            // Add event listeners
+            $(clone).find('.pattern-type').change(function() {
+                const newType = $(this).val();
+                const nameContainer = $(this).closest('.pattern-item').find('.pattern-name-container');
+                
+                if (newType === 'default') {
+                    nameContainer.hide();
+                } else {
+                    nameContainer.show();
+                }
+                
+                updateConfig();
+            });
+            
+            $(clone).find('.add-range-btn').click(function() {
+                addRangeToUI($(this).closest('.pattern-item').find('.ranges-container'));
+                updateConfig();
+            });
+            
+            $(clone).find('.remove-pattern-btn').click(function() {
+                $(this).closest('.pattern-item').remove();
+                updateConfig();
+            });
+            
+            // Append to container
+            $('#patterns-container').append(clone);
+        }
+        
+        // Add a range to the UI
+        function addRangeToUI(container, rangeData = null) {
+            const template = document.getElementById('range-template');
+            const clone = document.importNode(template.content, true);
+            
+            if (rangeData) {
+                $(clone).find('.start-page').val(rangeData.start || 1);
+                $(clone).find('.end-page').val(rangeData.end || 10);
+                $(clone).find('.range-name').val(rangeData.name || '');
+            }
+            
+            // Add event listeners
+            $(clone).find('.remove-range-btn').click(function() {
+                $(this).closest('.range-item').remove();
+                updateConfig();
+            });
+            
+            $(clone).find('input').change(updateConfig);
+            
+            // Append to container
+            container.append(clone);
+        }
+        
+        // Update config data from UI
+        function updateConfig() {
+            const newConfig = {};
+            
+            $('.pattern-item').each(function() {
+                const patternType = $(this).find('.pattern-type').val();
+                let patternKey;
+                
+                if (patternType === 'default') {
+                    patternKey = 'default';
+                } else {
+                    patternKey = $(this).find('.pattern-name').val();
+                    
+                    if (patternType === 'regex' && patternKey) {
+                        if (!patternKey.startsWith('^')) {
+                            patternKey = '^' + patternKey;
+                        }
+                        if (!patternKey.endsWith('$')) {
+                            patternKey = patternKey + '$';
+                        }
+                    }
+                }
+                
+                if (!patternKey) return;
+                
+                const unitName = $(this).find('.unit-name').val();
+                const prefix = $(this).find('.prefix').val();
+                
+                const ranges = [];
+                $(this).find('.range-item').each(function() {
+                    const start = parseInt($(this).find('.start-page').val());
+                    const end = parseInt($(this).find('.end-page').val());
+                    const name = $(this).find('.range-name').val();
+                    
+                    ranges.push({
+                        start: start,
+                        end: end,
+                        name: name
+                    });
+                });
+                
+                newConfig[patternKey] = {
+                    page_ranges: ranges
+                };
+                
+                if (unitName) {
+                    newConfig[patternKey].unit_name = unitName;
+                }
+                
+                if (prefix) {
+                    newConfig[patternKey].prefix = prefix;
+                }
+            });
+            
+            configData = newConfig;
+            updateJsonPreview();
+        }
+        
+        // Load config button
+        $('#load-config-btn').click(function() {
+            const configPath = $('#config_path').val();
+            
+            if (!configPath) {
+                showAlert('warning', 'Please enter a configuration file path');
+                return;
+            }
+            
+            window.location.href = `/config_editor?config_path=${encodeURIComponent(configPath)}`;
+        });
+        
+        // Add pattern button
+        $('#add-pattern-btn').click(function() {
+            addPatternToUI('new_pattern', {
+                page_ranges: [{
+                    start: 1,
+                    end: 20,
+                    name: 'Chapter1'
+                }],
+                unit_name: 'Hindi',
+                prefix: 'NCERT'
+            });
+            
+            updateConfig();
+        });
+        
+        // Add default button
+        $('#add-default-btn').click(function() {
+            addPatternToUI('default', {
+                page_ranges: [{
+                    start: 1,
+                    end: 50,
+                    name: 'Part1'
+                }],
+                unit_name: 'Hindi',
+                prefix: 'NCERT'
+            });
+            
+            updateConfig();
+            $(this).hide();
+        });
+        
+        // Save config button
+        $('#save-config-btn').click(function() {
+            const configPath = $('#config_path').val();
+            
+            if (!configPath) {
+                showAlert('warning', 'Please enter a configuration file path');
+                return;
+            }
+            
+            $.ajax({
+                url: '/save_config',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    config: configData,
+                    config_path: configPath
+                }),
+                beforeSend: function() {
+                    showAlert('info', 'Saving configuration...');
+                    $('#save-config-btn').prop('disabled', true);
+                    $('#save-config-btn').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+                },
+                success: function(response) {
+                    $('#save-config-btn').prop('disabled', false);
+                    $('#save-config-btn').html('<i class="fas fa-save"></i> Save Configuration');
+                    
+                    if (response.success) {
+                        showAlert('success', response.message);
+                    } else {
+                        showAlert('danger', response.message);
+                    }
+                },
+                error: function() {
+                    $('#save-config-btn').prop('disabled', false);
+                    $('#save-config-btn').html('<i class="fas fa-save"></i> Save Configuration');
+                    showAlert('danger', 'Error saving configuration');
+                }
+            });
+        });
+        
+        // Render initial patterns
+        renderPatterns();
+    });
+</script>
+{% endblock %}
