@@ -99,6 +99,54 @@ def split_pdf_direct(
         return {"status": "error", "message": str(exc)}
 
 
+def _summarize_extraction_result(
+    raw_text: str,
+    corrected_text: str,
+    has_encoding_issues: bool,
+    detected_font_type: str,
+    correct_encoding: bool,
+) -> dict:
+    """Build explicit comparison metadata for the Flask extraction UI."""
+    raw_equals_corrected = raw_text == corrected_text
+    conversion_applied = correct_encoding and not raw_equals_corrected
+
+    if not correct_encoding:
+        summary = (
+            "Showing direct pypdf extraction only because lipi-aparsoft conversion "
+            "was disabled for this request."
+        )
+        tone = "secondary"
+    elif has_encoding_issues and conversion_applied:
+        font_label = detected_font_type or "legacy"
+        summary = (
+            f"pypdf extracted the raw page text first. lipi-aparsoft then detected "
+            f"{font_label} encoding and converted that raw extraction into cleaner "
+            "Unicode Devanagari."
+        )
+        tone = "success"
+    elif has_encoding_issues:
+        summary = (
+            "pypdf extracted raw legacy-looking text and lipi-aparsoft ran its cleanup "
+            "pipeline, but the visible output stayed the same for this selection."
+        )
+        tone = "info"
+    else:
+        summary = (
+            "pypdf already extracted Devanagari text for this selection. lipi-aparsoft "
+            "did not detect a legacy font, so the Unicode output matches the raw pypdf extraction."
+        )
+        tone = "secondary"
+
+    return {
+        "raw_equals_corrected": raw_equals_corrected,
+        "conversion_applied": conversion_applied,
+        "comparison_tone": tone,
+        "extraction_summary": summary,
+        "raw_char_count": len(raw_text),
+        "unicode_char_count": len(corrected_text),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Routes — pages
 # ---------------------------------------------------------------------------
@@ -259,12 +307,23 @@ def extract_pdf_text():
         post_process=correct_encoding,
     )
 
+    raw_text = raw_result.get("full_text", "")
+    corrected_text = converted_result.get("full_text", "")
+    comparison = _summarize_extraction_result(
+        raw_text=raw_text,
+        corrected_text=corrected_text,
+        has_encoding_issues=converted_result.get("has_encoding_issues", False),
+        detected_font_type=converted_result.get("detected_font_type", "unknown"),
+        correct_encoding=correct_encoding,
+    )
+
     return jsonify(
         {
             "success": True,
             "filename": filename,
-            "raw_text": raw_result.get("full_text", ""),
-            "corrected_text": converted_result.get("full_text", ""),
+            "raw_text": raw_text,
+            "corrected_text": corrected_text,
+            **comparison,
             **converted_result,
         }
     )
