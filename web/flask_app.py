@@ -17,6 +17,7 @@ from lipi.preprocessor import HindiPreprocessor
 from lipi.splitter import PDFSplitter
 from lipi.extractor import extract_unicode_text
 from lipi import __version__ as SERVICE_VERSION
+
 UPLOAD_DIR = os.path.join(BASE_DIR, "temp")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
@@ -62,9 +63,7 @@ def get_pdf_info(file_path: str) -> dict:
     return PDFSplitter.get_pdf_info(file_path)
 
 
-def correct_hindi_text(
-    text: str, font_type: str = "auto"
-) -> dict:
+def correct_hindi_text(text: str, font_type: str = "auto") -> dict:
     """Correct legacy Hindi font encoding (in-process, no service dependency)."""
     has_issues, detected = HindiPreprocessor.detect_encoding(text)
     if has_issues:
@@ -90,9 +89,7 @@ def split_pdf_direct(
     """Split PDF directly using PDFSplitter (no service dependency)."""
     try:
         page_ranges = PDFSplitter.parse_page_ranges(ranges)
-        output_files = PDFSplitter.split_pdf(
-            input_file, output_dir, page_ranges, prefix, unit_name
-        )
+        output_files = PDFSplitter.split_pdf(input_file, output_dir, page_ranges, prefix, unit_name)
         return {
             "status": "success",
             "input_file": input_file,
@@ -186,9 +183,7 @@ def split_pdf():
     unit_name = request.form.get("unit_name") or None
 
     if not input_file or not ranges:
-        return jsonify(
-            {"success": False, "message": "input_file and ranges are required"}
-        )
+        return jsonify({"success": False, "message": "input_file and ranges are required"})
 
     try:
         input_file = _safe_path(input_file)
@@ -205,12 +200,8 @@ def split_pdf():
 
     result = split_pdf_direct(input_file, ranges, output_dir, prefix, unit_name)
     if result.get("status") == "success":
-        return jsonify(
-            {"success": True, "message": "PDF split successfully", "result": result}
-        )
-    return jsonify(
-        {"success": False, "message": result.get("message", "Unknown error")}
-    )
+        return jsonify({"success": True, "message": "PDF split successfully", "result": result})
+    return jsonify({"success": False, "message": result.get("message", "Unknown error")})
 
 
 @app.route("/correct_hindi_text", methods=["POST"])
@@ -252,7 +243,16 @@ def extract_pdf_text():
         except (ValueError, IndexError):
             pass
 
-    result = extract_unicode_text(
+    # Always extract raw text (no conversion) so the UI can show the before/after
+    raw_result = extract_unicode_text(
+        file_path,
+        page_range=page_range,
+        font_type="none",
+        post_process=False,
+    )
+
+    # Extract with conversion for the Unicode output
+    converted_result = extract_unicode_text(
         file_path,
         page_range=page_range,
         font_type=font_type if correct_encoding else "none",
@@ -263,9 +263,9 @@ def extract_pdf_text():
         {
             "success": True,
             "filename": filename,
-            "extracted_text": result.get("full_text", ""),
-            "corrected_text": result.get("full_text", ""),
-            **result,
+            "raw_text": raw_result.get("full_text", ""),
+            "corrected_text": converted_result.get("full_text", ""),
+            **converted_result,
         }
     )
 
@@ -337,9 +337,7 @@ def list_output_files():
         return jsonify({"success": False, "message": "Invalid output_dir"})
 
     if not os.path.isdir(output_dir):
-        return jsonify(
-            {"success": False, "message": f"Directory not found: {output_dir}"}
-        )
+        return jsonify({"success": False, "message": f"Directory not found: {output_dir}"})
 
     files = []
     for file_path in sorted(glob.glob(os.path.join(output_dir, "*.pdf"))):
@@ -348,9 +346,7 @@ def list_output_files():
                 "name": os.path.basename(file_path),
                 "path": file_path,
                 "size_kb": round(os.path.getsize(file_path) / 1024, 2),
-                "modified": datetime.fromtimestamp(
-                    os.path.getmtime(file_path)
-                ).isoformat(),
+                "modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
             }
         )
     return jsonify({"success": True, "files": files, "count": len(files)})
@@ -377,9 +373,7 @@ def delete_file():
         return jsonify({"success": False, "message": "File not found"})
     try:
         os.remove(file_path)
-        return jsonify(
-            {"success": True, "message": f"Deleted: {os.path.basename(file_path)}"}
-        )
+        return jsonify({"success": True, "message": f"Deleted: {os.path.basename(file_path)}"})
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)})
 
