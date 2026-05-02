@@ -66,11 +66,10 @@ def get_pdf_info(file_path: str) -> dict:
 def correct_hindi_text(text: str, font_type: str = "auto") -> dict:
     """Correct legacy Hindi font encoding (in-process, no service dependency)."""
     has_issues, detected = HindiPreprocessor.detect_encoding(text)
+    corrected = text
     if has_issues:
         corrected = HindiPreprocessor.convert(text, font_type)
-        corrected = HindiPreprocessor.post_process(corrected)
-    else:
-        corrected = text
+    corrected = HindiPreprocessor.post_process(corrected)
     return {
         "original_text": text,
         "has_encoding_issues": has_issues,
@@ -109,6 +108,7 @@ def _summarize_extraction_result(
     """Build explicit comparison metadata for the Flask extraction UI."""
     raw_equals_corrected = raw_text == corrected_text
     conversion_applied = correct_encoding and not raw_equals_corrected
+    legacy_conversion_applied = has_encoding_issues and conversion_applied
 
     if not correct_encoding:
         summary = (
@@ -116,7 +116,7 @@ def _summarize_extraction_result(
             "was disabled for this request."
         )
         tone = "secondary"
-    elif has_encoding_issues and conversion_applied:
+    elif legacy_conversion_applied:
         font_label = detected_font_type or "legacy"
         summary = (
             f"pypdf extracted the raw page text first. lipi-aparsoft then detected "
@@ -124,6 +124,13 @@ def _summarize_extraction_result(
             "Unicode Devanagari."
         )
         tone = "success"
+    elif conversion_applied:
+        summary = (
+            "pypdf already extracted Devanagari text, but lipi-aparsoft still improved "
+            "that raw extraction with generic Unicode cleanup such as mark-spacing, matra, "
+            "and broken-glyph repairs."
+        )
+        tone = "info"
     elif has_encoding_issues:
         summary = (
             "pypdf extracted raw legacy-looking text and lipi-aparsoft ran its cleanup "
@@ -140,6 +147,7 @@ def _summarize_extraction_result(
     return {
         "raw_equals_corrected": raw_equals_corrected,
         "conversion_applied": conversion_applied,
+        "legacy_conversion_applied": legacy_conversion_applied,
         "comparison_tone": tone,
         "extraction_summary": summary,
         "raw_char_count": len(raw_text),
