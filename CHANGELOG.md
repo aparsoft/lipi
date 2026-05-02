@@ -9,9 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - Made the Flask single-PDF extractor explicitly show the exact raw `pypdf` extraction alongside the `lipi-aparsoft` Unicode output for easier demos and screencasts.
 - Added extraction comparison metadata so the UI can state whether `lipi-aparsoft` actually changed the text or intentionally left the raw extraction unchanged.
+- Applied generic Unicode cleanup even when a page is already Devanagari and legacy-font detection is `unknown`, so broken `pypdf` output is still improved.
 
 ### Added
 - Focused Flask route tests covering legacy PDFs that do change and non-legacy PDFs that intentionally remain unchanged.
+- Added `compare_extraction_dump.py` to dump raw `pypdf` output and `lipi-aparsoft` output into separate text files for manual inspection.
 
 ## [1.0.1] - 2025-05-02
 
