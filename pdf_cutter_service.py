@@ -1,5 +1,5 @@
 """
-Backward-compatibility shim for pdf_cutter_service.py.
+Backward-compatibility shim for pdf_service.py.
 
 All functionality has been moved to the ``lipi`` package:
 - PDFSplitter, parse_page_ranges, etc. -> lipi.splitter
@@ -7,7 +7,7 @@ All functionality has been moved to the ``lipi`` package:
 - CLI -> lipi.cli
 - HindiPreprocessor -> lipi.preprocessor
 
-Existing imports like ``from pdf_cutter_service import PDFCutterService``
+Existing imports like ``from pdf_service import PDFCutterService``
 will continue to work via the PDFCutterService compatibility class below.
 """
 
@@ -73,6 +73,7 @@ class PDFCutterService:
 
     def batch_extract_unicode_text(self, input_dir, font_type="auto", post_process=True):
         import os
+
         results = []
         for filename in sorted(os.listdir(input_dir)):
             if not filename.lower().endswith(".pdf"):
@@ -105,6 +106,7 @@ class PDFCutterService:
 
 def main() -> None:
     from lipi.cli import main as lipi_main
+
     lipi_main()
 
 
