@@ -13,7 +13,7 @@ import base64
 
 # Import the service module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from pdf_cutter_service import PDFCutterService
+from pdf_service import PDFCutterService
 
 # Set page config
 st.set_page_config(
@@ -35,7 +35,7 @@ def start_service_process(output_dir: str, config_file: Optional[str] = None, po
     # Build the command
     cmd = [
         sys.executable,
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdf_cutter_service.py"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdf_service.py"),
         "--output-dir",
         output_dir,
         "--port",
