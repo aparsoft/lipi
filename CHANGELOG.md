@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.1] - 2025-05-02
+
+### Fixed
+- Updated PUBLISHING.md with complete release workflow and version bump requirements.
+- Documented PyPI "file already exists" error and prevention strategy.
+
 ## [1.0.0] - 2025-05-01
 
 ### Changed
