@@ -121,8 +121,9 @@ def extract_unicode_text(
 
                 if raw and font_type not in ("unknown", "none"):
                     raw = HindiPreprocessor.convert(raw, font_type)
-                    if post_process:
-                        raw = HindiPreprocessor.post_process(raw)
+
+                if raw and post_process and font_type != "none":
+                    raw = HindiPreprocessor.post_process(raw)
 
                 pages_text[page_num] = raw
 
