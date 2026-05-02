@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.2] - 2026-05-02
+
+### Changed
+- Made the Flask single-PDF extractor explicitly show the exact raw `pypdf` extraction alongside the `lipi-aparsoft` Unicode output for easier demos and screencasts.
+- Added extraction comparison metadata so the UI can state whether `lipi-aparsoft` actually changed the text or intentionally left the raw extraction unchanged.
+
+### Added
+- Focused Flask route tests covering legacy PDFs that do change and non-legacy PDFs that intentionally remain unchanged.
+
 ## [1.0.1] - 2025-05-02
 
 ### Fixed
