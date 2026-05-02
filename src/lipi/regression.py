@@ -14,7 +14,7 @@ _WORD_RE = re.compile(r"[\u0900-\u0963\u0970-\u097f]+")
 _MARK_SPACING_RE = re.compile(r"[\u0900-\u097f]\s+[\u093c\u0901\u0902\u0903\u093e\u093f\u0940\u0941\u0942\u0943\u0947\u0948\u0949\u094b\u094c\u094d]")
 _HALANT_SPACING_RE = re.compile(r"्\s+[\u0900-\u097f]")
 _DUPLICATE_MARKS_RE = re.compile(r"([ँंः़ािीुूृेैोौ्])\1+")
-_SPURIOUS_NUKTA_RE = re.compile(r"[क-ह](?:्)?़")
+_SPURIOUS_NUKTA_RE = re.compile(r"[ञचछझटठतथदधनपबभमयरलवशषसहव](?:्)?़")
 _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉॅ][ँंः]?[ािीुूृेैोौॉॅ]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
 
