@@ -20,7 +20,7 @@ from lipi.preprocessor import HindiPreprocessor
 from lipi.splitter import PDFSplitter
 from lipi.extractor import extract_unicode_text
 
-__version__ = "1.2.0"
+__version__ = "1.0.0"
 
 # Backwards-compatible aliases
 _KRUTIDEV_TO_UNICODE = HindiPreprocessor.get_mapping("krutidev")
