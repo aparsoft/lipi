@@ -11,9 +11,6 @@ Existing imports like ``from pdf_service import PDFCutterService``
 will continue to work via the PDFCutterService compatibility class below.
 """
 
-import json
-import re
-import urllib.parse
 from typing import Dict, Any, List, Tuple, Optional
 
 from lipi.preprocessor import HindiPreprocessor
@@ -21,10 +18,6 @@ from lipi.splitter import PDFSplitter
 from lipi.extractor import extract_unicode_text
 
 __version__ = "1.0.0"
-
-# Backwards-compatible aliases
-_KRUTIDEV_TO_UNICODE = HindiPreprocessor.get_mapping("krutidev")
-_CHANAKYA_TO_UNICODE = HindiPreprocessor.get_mapping("chanakya")
 
 
 class PDFCutterService:

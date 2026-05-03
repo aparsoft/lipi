@@ -6,7 +6,7 @@
 [![PyPI](https://img.shields.io/pypi/v/lipi-aparsoft)](https://pypi.org/project/lipi-aparsoft/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-orange)](https://github.com/aparsoft/lipi)
+[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)](https://github.com/aparsoft/lipi)
 
 ---
 
@@ -14,11 +14,11 @@
 
 ## What this does
 
-Two things:
-
 1. **Split PDFs by page range** - extract chapters, lectures, or units out of a large PDF into separate files, with optional batch processing via a JSON config.
 
 2. **Extract Unicode text from legacy Hindi-font PDFs** - detect KrutiDev / Chanakya encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
+
+3. **Optional second-stage lexicon correction** - a conservative, heuristic pass that catches noisy tokens the character-level mapping misses, using bounded Levenshtein distance against a built-in Hindi word list.
 
 ### Why this exists
 
@@ -184,7 +184,8 @@ Features:
 - Upload & preview PDF info (page count, size, encoding detection)
 - Single PDF splitting with named ranges
 - Batch directory processing with JSON config
-- Hindi text extraction with before/after preview
+- Hindi text extraction with **before/after comparison** (raw pypdf vs lipi-aparsoft output)
+- Conversion summary badges (legacy detected, text changed, etc.)
 - JSON config editor
 - Output file browser with download/delete
 
@@ -195,30 +196,31 @@ Features:
 ```
 lipi/
 ├── src/lipi/
-│   ├── __init__.py              # Public API (HindiPreprocessor)
+│   ├── __init__.py              # Public API: HindiPreprocessor, HindiLexiconCorrector, run_regression_harness
 │   ├── preprocessor.py          # Convert + detect + post-process
-│   ├── extractor.py             # PDF text extraction (pypdf)
-│   ├── correction.py            # Optional lexicon-based second stage
-│   ├── regression.py            # Page-by-page quality harness
+│   ├── extractor.py             # PDF text extraction (pypdf) + optional lexicon stage
+│   ├── correction.py            # HindiLexiconCorrector (bounded Levenshtein, suspicious-token heuristics)
+│   ├── regression.py            # Page-by-page quality harness with quality metrics
 │   ├── splitter.py              # PDF splitting + batch processing
-│   ├── cli.py                   # Command-line interface
-│   ├── _quality.py              # Garbage text detection
-│   ├── _lexicon.py              # Bundled Hindi lexicon for correction
+│   ├── cli.py                   # Command-line interface (extract, split, info, regress)
+│   ├── _quality.py              # Garbage text detection (character ratio analysis)
+│   ├── _lexicon.py              # Bundled Hindi word list (~300+ words)
 │   └── mappings/
 │       ├── __init__.py          # FONT_MAPPINGS merged dict
 │       ├── krutidev.py          # KrutiDev → Unicode base table
 │       ├── chanakya.py          # Chanakya → Unicode table
 │       └── walkman_chanakya.py  # Walkman-Chanakya905 overrides
 ├── web/
-│   ├── flask_app.py             # Flask web UI
+│   ├── flask_app.py             # Flask web UI (dual extraction + comparison)
 │   └── templates/               # HTML templates
 ├── tests/
-│   ├── test_mappings.py
-│   ├── test_preprocessor.py
-│   ├── test_extractor.py
-│   ├── test_correction.py
-│   ├── test_regression.py
-│   └── test_splitter.py
+│   ├── test_mappings.py         # Mapping tables: loading, merging, value validation
+│   ├── test_preprocessor.py     # Detection, conversion, i-matra reorder, post-process repairs
+│   ├── test_extractor.py        # Quality gate, file-not-found, generic cleanup on non-legacy PDFs
+│   ├── test_correction.py       # Lexicon corrector: token correction, suspicious token detection
+│   ├── test_regression.py       # Quality metrics: quality_index, lexicon_hit_rate, artifact counts
+│   ├── test_splitter.py         # Parse ranges, config validation, split files, PDF info
+│   └── test_flask_app.py        # Flask route tests
 ├── pyproject.toml
 └── README.md
 ```
@@ -234,19 +236,31 @@ PDF file (KrutiDev font)
 pypdf.extract_text()   <- returns garbled ASCII: "osQ kjk Fk dj jgk gS"
         |
         v
-detect_encoding()  <- heuristic: low Devanagari ratio + KrutiDev fingerprints
+detect_encoding()      <- heuristic: low Devanagari ratio + KrutiDev fingerprints
         |
         v
-convert()   <- longest-match-first substitution using char mapping table
+convert()              <- longest-match-first substitution using char mapping table
         |
         v
-post_process()  <- removes doubled matras, fixes common word errors
+post_process()         <- generic Unicode cleanup:
+                           - remove doubled matras (ाा→ा)
+                           - fix mark-spacing (consonant SPACE matra → consonant+matra)
+                           - fix halant-spacing (् SPACE consonant → ्consonant)
+                           - fix duplicate consonant+i-matra (कक→कि, ववक→विक)
+                           - fix श्श्ि → श्चि
+                           - fix decomposed nukta+i (डड़→ड़ि)
+                           - fix common words (अौर→और, अार→आर)
         |
         v
-lexicon second stage (optional)  <- conservative lexicon-guided cleanup on legacy paths only
+lexicon second stage   <- optional, only on legacy-detected paths:
+  (HindiLexiconCorrector)
+                           - split text into tokens
+                           - detect suspicious tokens (nonstandard nukta, duplicate marks)
+                           - find closest lexicon match via bounded Levenshtein
+                           - only replace if distance ≤ 2 and match is strong
         |
         v
-Unicode text: "के ारा थ कर रहा है"  <- ~85-92% accuracy
+Unicode text: "के ारा थ कर रहा है"  <- ~85-92% accuracy (improves with lexicon stage)
 ```
 
 ---
@@ -263,6 +277,9 @@ cd lipi
 pip install -e ".[dev]"
 pytest
 ```
+
+> **Install from PyPI:** `pip install lipi-aparsoft`
+> **Python import:** `from lipi import HindiPreprocessor` (import name is `lipi`, not `lipi-aparsoft`)
 
 ---
 
