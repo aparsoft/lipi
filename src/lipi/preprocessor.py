@@ -34,11 +34,28 @@ _IMATRA_REORDER_RE = re.compile(
     + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
 )
 _DEVA_MARKS = "\u093c\u0901\u0902\u0903\u093e\u093f\u0940\u0941\u0942\u0943\u0947\u0948\u0949\u094b\u094c\u094d"
-_MARK_SPACING_RE = re.compile(f"([\u0900-\u097f])\\s+([{_DEVA_MARKS}])")
+# Only attach a stranded matra back to a CONSONANT (not to another matra) — prevents
+# joining two separate words when both happen to end/start with a matra-like glyph.
+_MARK_SPACING_RE = re.compile(f"([{_CONS_RANGE}\u0958-\u095f])\\s+([{_DEVA_MARKS}])")
+# A consonant followed by trailing whitespace, then a matra, then more whitespace:
+#   'क े ' → 'के ' (collapses 'k a e' style detached extraction).
+_MARK_TRAILING_SPACING_RE = re.compile(
+    f"([{_CONS_RANGE}\u0958-\u095f])\\s+([{_DEVA_MARKS}])\\s+"
+)
 _HALANT_SPACING_RE = re.compile(r"(्)\s+([\u0900-\u097f])")
 _DUPLICATE_CONSONANT_I_RE = re.compile(rf"([{_CONS_RANGE}])\1(?=[{_CONS_RANGE}]|[\u0901\u0902\u0903])")
 _SHCHA_IMATRA_RE = re.compile(r"श्श्ि")
 _NUKTA_BASE_RE = re.compile(r"([डढ])\1़")
+
+# ---- Artefacts visible in already-Devanagari but font-corrupted PDFs ----
+# Stray SUB (0x1A) control characters from broken CMaps.
+_CTRL_SUB_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+# Zero-width joiner directly between two matras / halant-marks is almost always noise.
+_STRAY_ZWJ_RE = re.compile(f"\u200d(?=[{_DEVA_MARKS}])|(?<=[{_DEVA_MARKS}])\u200d")
+# Detached matra at start of a token (legitimate Devanagari never begins with a dependent vowel sign).
+_LEADING_MATRA_RE = re.compile(rf"(^|\s)([{_DEVA_MARKS}])(?=[{_CONS_RANGE}])")
+# Doubled e-matra immediately before anusvara (e.g. 'मेें' → 'में').
+_DOUBLE_E_BEFORE_ANUSVARA_RE = re.compile("\u0947\u0947(?=\u0902)")
 
 _NUKTA_I_REPLACEMENTS = {
     "ड": "ड़",
@@ -194,8 +211,15 @@ class HindiPreprocessor:
             return text
 
         # PDFs often insert spaces before dependent vowel signs or after halant.
+        # Strip control chars and stray ZWJ first so downstream regexes match cleanly.
+        text = _CTRL_SUB_RE.sub("", text)
+        text = _STRAY_ZWJ_RE.sub("", text)
+        text = _DOUBLE_E_BEFORE_ANUSVARA_RE.sub("\u0947", text)
+        # 'C े ' → 'Cे ' (collapse trailing space too) before the simple variant.
+        text = _MARK_TRAILING_SPACING_RE.sub(r"\1\2 ", text)
         text = _MARK_SPACING_RE.sub(r"\1\2", text)
         text = _HALANT_SPACING_RE.sub(r"\1\2", text)
+        text = _LEADING_MATRA_RE.sub(r"\1", text)
         text = _DUPLICATE_CONSONANT_I_RE.sub(r"\1ि", text)
         text = _SHCHA_IMATRA_RE.sub("श्चि", text)
         text = _NUKTA_BASE_RE.sub(_fix_decomposed_nukta_i, text)
@@ -240,3 +264,56 @@ class HindiPreprocessor:
     def get_mapping(font_type: str = "krutidev") -> Dict[str, str]:
         """Return the raw character mapping table for *font_type*."""
         return FONT_MAPPINGS.get(font_type, FONT_MAPPINGS["krutidev"])
+
+    # ------------------------------------------------------------------ #
+    #  Devanagari artefact diagnostics                                    #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def count_artifacts(text: str) -> Dict[str, int]:
+        """
+        Count Devanagari corruption artefacts in *text*.
+
+        Useful for PDFs that look like proper Unicode but were extracted
+        through a buggy font CMap ("scrambled Devanagari"). Returns a dict
+        with per-pattern counts plus a ``total`` key.
+        """
+        if not text:
+            return {
+                "control_chars": 0,
+                "stray_zwj": 0,
+                "leading_matra": 0,
+                "detached_mark": 0,
+                "halant_space": 0,
+                "duplicate_marks": 0,
+                "double_e_anusvara": 0,
+                "total": 0,
+            }
+
+        counts = {
+            "control_chars": len(_CTRL_SUB_RE.findall(text)),
+            "stray_zwj": len(_STRAY_ZWJ_RE.findall(text)),
+            "leading_matra": len(_LEADING_MATRA_RE.findall(text)),
+            "detached_mark": len(_MARK_SPACING_RE.findall(text)),
+            "halant_space": len(_HALANT_SPACING_RE.findall(text)),
+            "duplicate_marks": len(re.findall(r"([ँंः़ािीुूृेैॉोौ्])\1", text)),
+            "double_e_anusvara": len(_DOUBLE_E_BEFORE_ANUSVARA_RE.findall(text)),
+        }
+        counts["total"] = sum(counts.values())
+        return counts
+
+    @staticmethod
+    def detect_scrambled_devanagari(text: str, threshold: float = 0.01) -> bool:
+        """
+        True if *text* is mostly Devanagari but shows extraction artefacts.
+
+        Triggered when artefact count per Devanagari character exceeds
+        *threshold* (default 1%). These PDFs benefit from ``post_process``
+        even though ``detect_encoding`` returns ``unknown``.
+        """
+        if not text:
+            return False
+        deva = sum(1 for ch in text if "\u0900" <= ch <= "\u097f")
+        if deva < 50 or deva / max(len(text), 1) < 0.3:
+            return False
+        return HindiPreprocessor.count_artifacts(text)["total"] / deva > threshold
