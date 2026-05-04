@@ -69,6 +69,8 @@ def extract_unicode_text(
         "processed_pages": 0,
         "has_encoding_issues": False,
         "detected_font_type": "unknown",
+        "is_scrambled_devanagari": False,
+        "artifact_count": 0,
         "pages": {},
         "full_text": "",
         "second_stage": second_stage,
@@ -101,6 +103,18 @@ def extract_unicode_text(
             result["has_encoding_issues"] = has_issues
             result["detected_font_type"] = detected_font
 
+            # "Scrambled Devanagari": text is mostly Devanagari but has corruption
+            # artefacts (extracted via a buggy font CMap). post_process still helps.
+            scrambled = (
+                detected_font == "unknown"
+                and HindiPreprocessor.detect_scrambled_devanagari(sample)
+            )
+            result["is_scrambled_devanagari"] = scrambled
+            if scrambled:
+                result["has_encoding_issues"] = True
+                if result["detected_font_type"] == "unknown":
+                    result["detected_font_type"] = "scrambled_devanagari"
+
             if font_type == "auto":
                 font_type = detected_font
 
@@ -119,7 +133,7 @@ def extract_unicode_text(
                     logger.warning("Page %d extract failed: %s", page_num, exc)
                     raw = ""
 
-                if raw and font_type not in ("unknown", "none"):
+                if raw and font_type not in ("unknown", "none", "scrambled_devanagari"):
                     raw = HindiPreprocessor.convert(raw, font_type)
 
                 if raw and post_process and font_type != "none":
@@ -156,6 +170,10 @@ def extract_unicode_text(
             result["pages"] = pages_text
             result["processed_pages"] = len(pages_text)
             result["full_text"] = "\n\n".join(pages_text.values())
+            result["artifact_count"] = sum(
+                HindiPreprocessor.count_artifacts(t)["total"]
+                for t in pages_text.values()
+            )
 
     except FileNotFoundError:
         logger.error("File not found: %s", pdf_path)
