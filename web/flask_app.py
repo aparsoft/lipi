@@ -108,7 +108,12 @@ def _summarize_extraction_result(
     """Build explicit comparison metadata for the Flask extraction UI."""
     raw_equals_corrected = raw_text == corrected_text
     conversion_applied = correct_encoding and not raw_equals_corrected
-    legacy_conversion_applied = has_encoding_issues and conversion_applied
+    scrambled_cleanup_applied = detected_font_type == "scrambled_devanagari" and conversion_applied
+    legacy_conversion_applied = (
+        has_encoding_issues
+        and conversion_applied
+        and detected_font_type not in ("unknown", "scrambled_devanagari")
+    )
 
     if not correct_encoding:
         summary = (
@@ -124,6 +129,13 @@ def _summarize_extraction_result(
             "Unicode Devanagari."
         )
         tone = "success"
+    elif scrambled_cleanup_applied:
+        summary = (
+            "pypdf already extracted Devanagari text, but the PDF's Unicode mapping was "
+            "scrambled. lipi-aparsoft repaired broken matra placement, mark spacing, and "
+            "other extraction artefacts without running legacy-font glyph conversion."
+        )
+        tone = "info"
     elif conversion_applied:
         summary = (
             "pypdf already extracted Devanagari text, but lipi-aparsoft still improved "
@@ -148,6 +160,7 @@ def _summarize_extraction_result(
         "raw_equals_corrected": raw_equals_corrected,
         "conversion_applied": conversion_applied,
         "legacy_conversion_applied": legacy_conversion_applied,
+        "scrambled_cleanup_applied": scrambled_cleanup_applied,
         "comparison_tone": tone,
         "extraction_summary": summary,
         "raw_char_count": len(raw_text),
