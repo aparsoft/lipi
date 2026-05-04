@@ -13,6 +13,7 @@ _DUPLICATE_MARKS_RE = re.compile(r"([ँंः़ािीुूृेैोौ�
 _SPURIOUS_NUKTA_RE = re.compile(r"[क-ह](?:्)?़")
 _NONSTANDARD_NUKTA_RE = re.compile(r"[ञचछझटठतथदधनपबभमयरलवशषसहव](?:्)?़")
 _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉॅ][ँंः]?[ािीुूृेैोौॉॅ]")
+_BROKEN_EMATRA_TOKEN_RE = re.compile(r"[ेै][ािीुूृोौ]")
 _LEADING_IMATRA_TOKEN_RE = re.compile(r"^ि(?=[\u0900-\u097f])")
 _J_IMATRA_SWAP_RE = re.compile(r"ज((?:[क-ह]्)*[क-ह])")
 _LOOKUP_SEQUENCE_REPLACEMENTS = (
@@ -164,6 +165,8 @@ class HindiLexiconCorrector:
         direct_matches = self._normalized_index.get(normalized)
         if direct_matches and len(direct_matches) == 1:
             return next(iter(direct_matches))
+        if _BROKEN_EMATRA_TOKEN_RE.search(token):
+            return None
 
         allowed_distance = _allowed_distance(len(normalized), self.max_distance)
         best_candidate: Optional[str] = None
