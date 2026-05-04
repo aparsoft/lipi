@@ -5,6 +5,7 @@ Uses pypdf for extraction and applies legacy-font normalization on the
 extracted text.
 """
 
+import json
 import os
 import logging
 from typing import Dict, Any, Optional, Tuple
@@ -15,6 +16,68 @@ from lipi.correction import HindiLexiconCorrector, build_contextual_lexicon
 from lipi.preprocessor import HindiPreprocessor
 
 logger = logging.getLogger(__name__)
+
+
+def _load_text_overrides(overrides_path: Optional[str]) -> Dict[str, Any]:
+    """Load optional source-specific text replacements from JSON."""
+    if not overrides_path:
+        return {}
+
+    with open(overrides_path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    if not isinstance(data, dict):
+        raise ValueError("Overrides file must contain a JSON object")
+    return data
+
+
+def _apply_replacements(text: str, rules: Dict[str, Any]) -> Tuple[str, int]:
+    """Apply literal replacements from one rule set."""
+    if not text or not rules:
+        return text, 0
+
+    replacements = rules.get("replacements", [])
+    if not isinstance(replacements, list):
+        raise ValueError("Overrides 'replacements' must be a list of [from, to] pairs")
+
+    updated = text
+    applied = 0
+    for pair in replacements:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ValueError("Each override replacement must be a [from, to] pair")
+
+        source, target = pair
+        occurrences = updated.count(source)
+        if occurrences:
+            updated = updated.replace(source, target)
+            applied += occurrences
+
+    return updated, applied
+
+
+def _apply_text_overrides(
+    text: str,
+    page_num: int,
+    overrides: Dict[str, Any],
+) -> Tuple[str, int]:
+    """Apply global and page-specific source overrides."""
+    if not text or not overrides:
+        return text, 0
+
+    updated = text
+    applied = 0
+
+    global_rules = overrides.get("global", {})
+    if global_rules:
+        updated, count = _apply_replacements(updated, global_rules)
+        applied += count
+
+    page_rules = overrides.get("pages", {}).get(str(page_num), {})
+    if page_rules:
+        updated, count = _apply_replacements(updated, page_rules)
+        applied += count
+
+    return updated, applied
 
 
 def _summarize_correction_stats(page_stats: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
@@ -45,6 +108,7 @@ def extract_unicode_text(
     second_stage: str = "none",
     lexicon_path: Optional[str] = None,
     bootstrap_lexicon: bool = False,
+    overrides_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Extract text from *pdf_path*, auto-correcting legacy Hindi font
@@ -58,6 +122,7 @@ def extract_unicode_text(
         second_stage: Optional extra correction layer (``"none"`` or ``"lexicon"``).
         lexicon_path: Optional external lexicon file used by the second stage.
         bootstrap_lexicon: Build a supplemental lexicon from repeated clean tokens in the document.
+        overrides_path: Optional JSON file with global/page-specific literal replacements.
 
     Returns:
         Dict with keys: filename, total_pages, processed_pages,
@@ -71,6 +136,7 @@ def extract_unicode_text(
         "detected_font_type": "unknown",
         "is_scrambled_devanagari": False,
         "artifact_count": 0,
+        "overrides_applied": 0,
         "pages": {},
         "full_text": "",
         "second_stage": second_stage,
@@ -79,6 +145,7 @@ def extract_unicode_text(
     try:
         with open(pdf_path, "rb") as fh:
             reader = PdfReader(fh)
+            overrides = _load_text_overrides(overrides_path)
             total = len(reader.pages)
             result["total_pages"] = total
 
@@ -116,7 +183,7 @@ def extract_unicode_text(
                     result["detected_font_type"] = "scrambled_devanagari"
 
             if font_type == "auto":
-                font_type = detected_font
+                font_type = result["detected_font_type"]
 
             should_apply_second_stage = second_stage == "lexicon" and font_type not in (
                 "unknown",
@@ -138,6 +205,10 @@ def extract_unicode_text(
 
                 if raw and post_process and font_type != "none":
                     raw = HindiPreprocessor.post_process(raw)
+
+                if raw and overrides:
+                    raw, override_count = _apply_text_overrides(raw, page_num, overrides)
+                    result["overrides_applied"] += override_count
 
                 pages_text[page_num] = raw
 
