@@ -75,6 +75,7 @@ def _cmd_extract(args) -> None:
         second_stage=args.second_stage,
         lexicon_path=args.lexicon_file,
         bootstrap_lexicon=args.bootstrap_lexicon,
+        overrides_path=args.overrides_file,
     )
 
     if "error" in result:
@@ -123,6 +124,7 @@ def _cmd_regress(args) -> None:
         second_stage=args.second_stage,
         lexicon_path=args.lexicon_file,
         bootstrap_lexicon=args.bootstrap_lexicon,
+        overrides_path=args.overrides_file,
         page_limit=args.page_limit,
     )
 
@@ -163,6 +165,10 @@ def main() -> None:
         action="store_true",
         help="Build a supplemental lexicon from repeated clean tokens in the document",
     )
+    p_extract.add_argument(
+        "--overrides-file",
+        help="Optional JSON file with source/page-specific text replacements",
+    )
     p_extract.add_argument("--json", action="store_true", help="Output as JSON")
     p_extract.set_defaults(func=_cmd_extract)
 
@@ -202,6 +208,10 @@ def main() -> None:
         "--bootstrap-lexicon",
         action="store_true",
         help="Build a supplemental lexicon from repeated clean tokens in the analyzed pages",
+    )
+    p_regress.add_argument(
+        "--overrides-file",
+        help="Optional JSON file with source/page-specific text replacements",
     )
     p_regress.add_argument("--page-limit", type=int, help="Limit analysis to the first N pages")
     p_regress.add_argument("--json", action="store_true", help="Output the report as JSON")
