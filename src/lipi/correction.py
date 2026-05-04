@@ -13,11 +13,15 @@ _DUPLICATE_MARKS_RE = re.compile(r"([ँंः़ािीुूृेैोौ�
 _SPURIOUS_NUKTA_RE = re.compile(r"[क-ह](?:्)?़")
 _NONSTANDARD_NUKTA_RE = re.compile(r"[ञचछझटठतथदधनपबभमयरलवशषसहव](?:्)?़")
 _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉॅ][ँंः]?[ािीुूृेैोौॉॅ]")
+_LEADING_IMATRA_TOKEN_RE = re.compile(r"^ि(?=[\u0900-\u097f])")
+_J_IMATRA_SWAP_RE = re.compile(r"ज((?:[क-ह]्)*[क-ह])")
 _LOOKUP_SEQUENCE_REPLACEMENTS = (
     ("ांे", "ों"),
     ("ाे", "ो"),
     ("ाै", "ौ"),
     ("ाॉ", "ॉ"),
+    ("ेा", "ा"),
+    ("ेो", "ो"),
 )
 
 
@@ -132,9 +136,26 @@ class HindiLexiconCorrector:
         self.lexicon.update(new_words)
         self._rebuild_index()
 
+    def _repair_direct_j_imatra_swap(self, token: str) -> Optional[str]:
+        """Repair a common scrambled-Devanagari ज/ि swap when the candidate is exact."""
+        if not (_LEADING_IMATRA_TOKEN_RE.search(token) or _J_IMATRA_SWAP_RE.search(token)):
+            return None
+
+        candidate = _LEADING_IMATRA_TOKEN_RE.sub("ज", token)
+        candidate = _J_IMATRA_SWAP_RE.sub(lambda match: match.group(1) + "ि", candidate)
+        if candidate != token and candidate in self.lexicon:
+            return candidate
+        return None
+
     def _suggest(self, token: str) -> Optional[str]:
         if token in self.lexicon:
             return token
+
+        direct_swap_candidate = self._repair_direct_j_imatra_swap(token)
+        if direct_swap_candidate:
+            return direct_swap_candidate
+        if _LEADING_IMATRA_TOKEN_RE.search(token) or _J_IMATRA_SWAP_RE.search(token):
+            return None
 
         normalized = _normalize_lookup_token(token)
         if not normalized:
@@ -194,7 +215,9 @@ class HindiLexiconCorrector:
         if len(token) < min_token_length or token in self.lexicon:
             return False
         return bool(
-            _NONSTANDARD_NUKTA_RE.search(token)
+            _LEADING_IMATRA_TOKEN_RE.search(token)
+            or _J_IMATRA_SWAP_RE.search(token)
+            or _NONSTANDARD_NUKTA_RE.search(token)
             or _DUPLICATE_MARKS_RE.search(token)
             or _SUSPICIOUS_MARK_SEQUENCE_RE.search(token)
         )
