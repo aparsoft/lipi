@@ -33,6 +33,13 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "जकया"
         assert result["stats"]["corrected_tokens"] == 0
 
+    def test_normalizes_broken_ematra_sequences_before_lookup(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"मारती", "मारता", "मोती"})
+        result = corrector.correct_text("मेारती मेारता मेोती")
+
+        assert result["text"] == "मारती मारता मोती"
+        assert result["stats"]["corrected_tokens"] == 3
+
 
 class TestBuildContextualLexicon:
     def test_collects_repeated_clean_tokens(self):
