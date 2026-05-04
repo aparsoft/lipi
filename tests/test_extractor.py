@@ -1,9 +1,11 @@
 """Unit tests for lipi.extractor and lipi._quality."""
 
+import json
 from pathlib import Path
 
 import pytest
 from lipi._quality import is_garbage_text
+from lipi import extractor as extractor_module
 from lipi.extractor import extract_unicode_text
 
 
@@ -79,7 +81,61 @@ class TestExtractUnicodeText:
             post_process=True,
         )
 
-        assert cleaned["has_encoding_issues"] is False
         assert raw["pages"][1] != cleaned["pages"][1]
+        assert cleaned["detected_font_type"] in {"unknown", "scrambled_devanagari"}
         assert "पश्श्िम" in raw["pages"][1]
         assert "पश्चिम" in cleaned["pages"][1]
+
+    def test_second_stage_can_run_for_scrambled_devanagari(self, monkeypatch):
+        pdf_path = ROOT / "temp" / "ihkr101.pdf"
+
+        monkeypatch.setattr(
+            extractor_module.HindiPreprocessor,
+            "detect_encoding",
+            staticmethod(lambda text: (False, "unknown")),
+        )
+        monkeypatch.setattr(
+            extractor_module.HindiPreprocessor,
+            "detect_scrambled_devanagari",
+            staticmethod(lambda text, threshold=0.01: True),
+        )
+
+        result = extract_unicode_text(
+            str(pdf_path),
+            page_range=(1, 1),
+            font_type="auto",
+            post_process=True,
+            second_stage="lexicon",
+        )
+
+        assert result["detected_font_type"] == "scrambled_devanagari"
+        assert result["second_stage_applied"] is True
+        assert "correction_stats" in result
+
+    def test_source_overrides_apply_after_cleanup(self, tmp_path):
+        pdf_path = ROOT / "temp" / "ihkr101.pdf"
+        overrides_path = tmp_path / "overrides.json"
+        overrides_path.write_text(
+            json.dumps(
+                {
+                    "pages": {
+                        "1": {
+                            "replacements": [["पश्चिम", "पश्चिमी"]],
+                        }
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = extract_unicode_text(
+            str(pdf_path),
+            page_range=(1, 1),
+            font_type="auto",
+            post_process=True,
+            overrides_path=str(overrides_path),
+        )
+
+        assert result["overrides_applied"] >= 1
+        assert "पश्चिमी" in result["pages"][1]
