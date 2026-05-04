@@ -81,6 +81,7 @@ def run_regression_harness(
     lexicon_path: Optional[str] = None,
     bootstrap_lexicon: bool = True,
     page_limit: Optional[int] = None,
+    overrides_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run page-by-page quality measurement over one or more sample PDFs."""
     reports: List[Dict[str, Any]] = []
@@ -98,6 +99,7 @@ def run_regression_harness(
             font_type=font_type,
             post_process=True,
             second_stage="none",
+            overrides_path=overrides_path,
         )
         if "error" in baseline:
             reports.append({
@@ -123,6 +125,7 @@ def run_regression_harness(
             second_stage=second_stage,
             lexicon_path=lexicon_path,
             bootstrap_lexicon=bootstrap_lexicon,
+            overrides_path=overrides_path,
         )
 
         page_reports: List[Dict[str, Any]] = []
