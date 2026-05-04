@@ -40,6 +40,13 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "मारती मारता मोती"
         assert result["stats"]["corrected_tokens"] == 3
 
+    def test_broken_ematra_without_exact_match_does_not_fuzzy_jump(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"मार्ग", "मेरा"})
+        result = corrector.correct_text("मेारो")
+
+        assert result["text"] == "मेारो"
+        assert result["stats"]["corrected_tokens"] == 0
+
 
 class TestBuildContextualLexicon:
     def test_collects_repeated_clean_tokens(self):
