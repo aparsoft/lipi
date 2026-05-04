@@ -5,9 +5,7 @@ from lipi.correction import HindiLexiconCorrector, build_contextual_lexicon
 
 class TestHindiLexiconCorrector:
     def test_corrects_using_normalized_lexicon_distance(self):
-        corrector = HindiLexiconCorrector(
-            lexicon_words={"वर्तमान", "प्रार्थना", "सिर्फ", "सफेद", "बर्फ"}
-        )
+        corrector = HindiLexiconCorrector(lexicon_words={"वर्तमान", "प्रार्थना", "सिर्फ", "सफेद", "बर्फ"})
 
         result = corrector.correct_text("वत़मान प्राथ़ना सिप़्ा़फ सप़्ोफद बप़्ा़फ")
 
@@ -19,6 +17,20 @@ class TestHindiLexiconCorrector:
         corrector = HindiLexiconCorrector(lexicon_words={"और", "था"})
         result = corrector.correct_text("और था", min_token_length=4)
         assert result["text"] == "और था"
+        assert result["stats"]["corrected_tokens"] == 0
+
+    def test_repairs_safe_j_imatra_swap_when_exact_candidate_exists(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"किसी", "जानवरों", "निश्चय", "जाता"})
+        result = corrector.correct_text("जकसी िानवरों जनश्चय िाता")
+
+        assert result["text"] == "किसी जानवरों निश्चय जाता"
+        assert result["stats"]["corrected_tokens"] == 4
+
+    def test_does_not_fuzzy_correct_unconfirmed_j_imatra_swap(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"क्या", "कथा"})
+        result = corrector.correct_text("जकया", min_token_length=4)
+
+        assert result["text"] == "जकया"
         assert result["stats"]["corrected_tokens"] == 0
 
 
