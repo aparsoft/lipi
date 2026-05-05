@@ -11,6 +11,7 @@ Usage::
 
 import argparse
 import json
+import os
 import sys
 import logging
 
@@ -134,6 +135,51 @@ def _cmd_regress(args) -> None:
         _print_regression_report(report)
 
 
+def _cmd_correct_corpus(args) -> None:
+    from pathlib import Path
+
+    from lipi.batch import BatchConfig, discover_files, run_batch, summarise, write_jsonl
+
+    root = Path(args.input_path)
+    if not root.exists():
+        print(f"Error: input path not found: {root}", file=sys.stderr)
+        sys.exit(1)
+
+    extensions = tuple(ext if ext.startswith(".") else f".{ext}" for ext in args.extensions)
+    files = discover_files(root, extensions)
+    if not files:
+        print(f"No files matching {extensions} under {root}", file=sys.stderr)
+        sys.exit(1)
+
+    config = BatchConfig(
+        correction_mode=args.correction_mode,
+        font_type=args.font_type,
+        use_symspell=args.use_symspell,
+        symspell_dictionary_path=args.symspell_dict,
+        symspell_max_edit_distance=args.symspell_max_distance,
+        file_extensions=extensions,
+        workers=args.workers,
+    )
+
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    written = write_jsonl(run_batch(files, config), output_path)
+    summary = summarise(output_path)
+    summary["output_path"] = str(output_path)
+    summary["files_processed"] = written
+
+    if args.json:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        print(f"Processed {written} file(s) -> {output_path}")
+        print(f"  errors: {summary['errors']}")
+        print(f"  artifacts removed: {summary['artifacts_removed']}")
+        print(f"  tokens corrected (lexicon): {summary['tokens_corrected_lexicon']}")
+        if config.use_symspell:
+            print(f"  tokens corrected (symspell): {summary['tokens_corrected_symspell']}")
+        print(f"  font types: {summary['font_types']}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="lipi",
@@ -216,6 +262,57 @@ def main() -> None:
     p_regress.add_argument("--page-limit", type=int, help="Limit analysis to the first N pages")
     p_regress.add_argument("--json", action="store_true", help="Output the report as JSON")
     p_regress.set_defaults(func=_cmd_regress)
+
+    # -- correct-corpus --
+    p_corpus = sub.add_parser(
+        "correct-corpus",
+        help="Batch-clean a directory of pre-extracted Hindi text files into a JSONL report",
+    )
+    p_corpus.add_argument("input_path", help="File or directory to process recursively")
+    p_corpus.add_argument(
+        "-o", "--output", default="lipi_corpus.jsonl", help="Output JSONL path"
+    )
+    p_corpus.add_argument(
+        "--correction-mode",
+        default="safe",
+        choices=["none", "safe", "aggressive"],
+        help="Lexicon-based second-stage correction mode (default: safe)",
+    )
+    p_corpus.add_argument(
+        "--font-type",
+        default="auto",
+        choices=["auto", "krutidev", "chanakya", "scrambled_devanagari", "none"],
+        help="Font encoding hint (default: auto)",
+    )
+    p_corpus.add_argument(
+        "--extensions",
+        nargs="+",
+        default=[".txt"],
+        help="File suffixes to include (default: .txt)",
+    )
+    p_corpus.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, (os.cpu_count() or 2) - 1),
+        help="Number of worker processes (default: cpu_count - 1)",
+    )
+    p_corpus.add_argument(
+        "--use-symspell",
+        action="store_true",
+        help="Append SymSpell-based correction layer (requires extras: pip install 'lipi-aparsoft[symspell]')",
+    )
+    p_corpus.add_argument(
+        "--symspell-dict",
+        help="Path to a SymSpell-format frequency dictionary (default: bundled small dict)",
+    )
+    p_corpus.add_argument(
+        "--symspell-max-distance",
+        type=int,
+        default=2,
+        help="SymSpell max edit distance (default: 2)",
+    )
+    p_corpus.add_argument("--json", action="store_true", help="Print summary as JSON")
+    p_corpus.set_defaults(func=_cmd_correct_corpus)
 
     args = parser.parse_args()
     if not args.command:
