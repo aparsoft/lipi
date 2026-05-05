@@ -16,6 +16,11 @@ _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉ�
 _BROKEN_EMATRA_TOKEN_RE = re.compile(r"[ेै][ािीुूृोौ]")
 _LEADING_IMATRA_TOKEN_RE = re.compile(r"^ि(?=[\u0900-\u097f])")
 _J_IMATRA_SWAP_RE = re.compile(r"ज((?:[क-ह]्)*[क-ह])")
+_ZERO_WIDTH_RE = re.compile(r"[\u200c\u200d]")
+_DUPLICATE_HALANT_RE = re.compile(r"्{2,}")
+_HALANT_DUPLICATE_CONSONANT_RE = re.compile(r"्([क-हक़-य़])\1")
+_REPEATED_BASE_CONSONANT_RE = re.compile(r"([यवनमतलसकगदपबरह])\1")
+_DUPLICATE_MARK_CLUSTER_RE = re.compile(r"([ािीुूृेैोौ][ँं])\1+")
 _LOOKUP_SEQUENCE_REPLACEMENTS = (
     ("ांे", "ों"),
     ("ाे", "ो"),
@@ -28,9 +33,19 @@ _LOOKUP_SEQUENCE_REPLACEMENTS = (
 
 def _normalize_lookup_token(word: str) -> str:
     """Normalize noisy tokens before lexicon lookup."""
-    word = _DUPLICATE_MARKS_RE.sub(r"\1", word)
-    for pattern, replacement in _LOOKUP_SEQUENCE_REPLACEMENTS:
-        word = word.replace(pattern, replacement)
+    word = _ZERO_WIDTH_RE.sub("", word)
+    previous = None
+    for _ in range(4):
+        previous = word
+        word = _DUPLICATE_HALANT_RE.sub("्", word)
+        word = _HALANT_DUPLICATE_CONSONANT_RE.sub(r"्\1", word)
+        word = _REPEATED_BASE_CONSONANT_RE.sub(r"\1", word)
+        word = _DUPLICATE_MARKS_RE.sub(r"\1", word)
+        word = _DUPLICATE_MARK_CLUSTER_RE.sub(r"\1", word)
+        for pattern, replacement in _LOOKUP_SEQUENCE_REPLACEMENTS:
+            word = word.replace(pattern, replacement)
+        if word == previous:
+            break
     return word.replace("़", "").replace("्", "")
 
 
@@ -148,6 +163,21 @@ class HindiLexiconCorrector:
             return candidate
         return None
 
+    def _repair_structural_duplication(self, token: str) -> Optional[str]:
+        """Repair repeated-halant / repeated-consonant noise when an exact candidate exists."""
+        if not (
+            _DUPLICATE_HALANT_RE.search(token)
+            or _HALANT_DUPLICATE_CONSONANT_RE.search(token)
+            or _REPEATED_BASE_CONSONANT_RE.search(token)
+            or _DUPLICATE_MARK_CLUSTER_RE.search(token)
+        ):
+            return None
+
+        candidate = _normalize_lookup_token(token)
+        if candidate != token and candidate in self.lexicon:
+            return candidate
+        return None
+
     def _suggest(self, token: str) -> Optional[str]:
         if token in self.lexicon:
             return token
@@ -155,8 +185,10 @@ class HindiLexiconCorrector:
         direct_swap_candidate = self._repair_direct_j_imatra_swap(token)
         if direct_swap_candidate:
             return direct_swap_candidate
-        if _LEADING_IMATRA_TOKEN_RE.search(token) or _J_IMATRA_SWAP_RE.search(token):
-            return None
+
+        direct_structural_candidate = self._repair_structural_duplication(token)
+        if direct_structural_candidate:
+            return direct_structural_candidate
 
         normalized = _normalize_lookup_token(token)
         if not normalized:
@@ -165,7 +197,15 @@ class HindiLexiconCorrector:
         direct_matches = self._normalized_index.get(normalized)
         if direct_matches and len(direct_matches) == 1:
             return next(iter(direct_matches))
-        if _BROKEN_EMATRA_TOKEN_RE.search(token):
+        if (
+            _LEADING_IMATRA_TOKEN_RE.search(token)
+            or _J_IMATRA_SWAP_RE.search(token)
+            or _BROKEN_EMATRA_TOKEN_RE.search(token)
+            or _DUPLICATE_HALANT_RE.search(token)
+            or _HALANT_DUPLICATE_CONSONANT_RE.search(token)
+            or _REPEATED_BASE_CONSONANT_RE.search(token)
+            or _DUPLICATE_MARK_CLUSTER_RE.search(token)
+        ):
             return None
 
         allowed_distance = _allowed_distance(len(normalized), self.max_distance)
@@ -220,6 +260,10 @@ class HindiLexiconCorrector:
         return bool(
             _LEADING_IMATRA_TOKEN_RE.search(token)
             or _J_IMATRA_SWAP_RE.search(token)
+            or _DUPLICATE_HALANT_RE.search(token)
+            or _HALANT_DUPLICATE_CONSONANT_RE.search(token)
+            or _REPEATED_BASE_CONSONANT_RE.search(token)
+            or _DUPLICATE_MARK_CLUSTER_RE.search(token)
             or _NONSTANDARD_NUKTA_RE.search(token)
             or _DUPLICATE_MARKS_RE.search(token)
             or _SUSPICIOUS_MARK_SEQUENCE_RE.search(token)
