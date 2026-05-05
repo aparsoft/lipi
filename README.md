@@ -20,6 +20,16 @@
 
 3. **Optional second-stage lexicon correction** - a conservative, heuristic pass that catches noisy tokens the character-level mapping misses, using bounded Levenshtein distance against a built-in Hindi word list.
 
+4. **Clean already-extracted raw text** - if the PDF is gone and you only have noisy text in a database / JSON / CSV dump, reuse the same cleanup stack directly on that text.
+
+### Common use cases
+
+- **Educational textbook ingestion**: split books chapter-wise, extract text, and normalize Hindi into searchable Unicode.
+- **Already-extracted corpus cleanup**: repair noisy Hindi text already stored in a database, JSONL file, spreadsheet export, or search index without reopening the PDFs.
+- **RAG / search preprocessing**: clean chapter text before chunking for embeddings, keyword search, question answering, or summarization.
+- **Corpus QA and triage**: flag `scrambled_devanagari` pages, count extraction artefacts, and route only the worst pages for human review or a later LLM pass.
+- **Migration of legacy content archives**: batch-convert old KrutiDev / Chanakya learning materials into Unicode Devanagari before re-publishing or analytics.
+
 ### Why this exists
 
 Old legacy Hindi textbooks, state board materials, government circulars, and Hindi newspapers were typeset in **glyph-substitution fonts** like KrutiDev and Chanakya *before* Unicode became the standard.  These PDFs *look* correct in a viewer but the underlying bytes are ASCII - not Devanagari.  When you extract text with any standard library (`pypdf`, `pdfplumber`, `pdfminer`) you get gibberish like `osQ kjk Fk Hk`.
@@ -100,6 +110,56 @@ improved = extract_unicode_text(
 print(improved["correction_stats"])
 ```
 
+### Clean already-extracted raw text (no PDF required)
+
+```python
+from lipi import clean_extracted_text
+
+raw_text = """भाषा संंगम\nशब््दोों की सूची"""
+
+result = clean_extracted_text(
+        raw_text,
+        correction_mode="safe",  # recommended default for bulk corpora
+)
+
+print(result["detected_font_type"])      # "unknown" or "scrambled_devanagari"
+print(result["artifact_count_before"])   # e.g. 6
+print(result["artifact_count_after"])    # e.g. 2
+print(result["cleaned_text"])
+```
+
+### Batch-clean a corpus you already extracted
+
+```python
+from lipi import clean_extracted_text
+
+pages = [
+        {"doc_id": "book-1", "page": 1, "raw_text": "..."},
+        {"doc_id": "book-1", "page": 2, "raw_text": "..."},
+        {"doc_id": "book-1", "page": 3, "raw_text": "..."},
+]
+
+context_texts = [page["raw_text"] for page in pages]
+
+for page in pages:
+        result = clean_extracted_text(
+                page["raw_text"],
+                correction_mode="safe",
+                contextual_texts=context_texts,
+                bootstrap_lexicon=True,
+        )
+        page["cleaned_text"] = result["cleaned_text"]
+        page["artifacts_removed"] = result["artifacts_removed"]
+```
+
+This is the intended path when you already have text for lakhs of PDFs and want a safer first-pass cleanup without reopening each source file.
+
+### Choose a correction mode
+
+- `none`: only conversion + Unicode cleanup. Best when you want zero lexicon intervention.
+- `safe`: exact normalized lexicon matches only. Recommended default for large-scale corpora.
+- `aggressive`: bounded fuzzy correction. Useful for review queues and experiments, but inspect the output.
+
 ### Run the regression harness over real samples
 
 ```python
@@ -170,6 +230,8 @@ lipi regress temp/jhkr102.pdf temp/ihkr101.pdf
 lipi regress temp/jhkr102.pdf --bootstrap-lexicon
 ```
 
+For already-extracted text, use `clean_extracted_text()` from Python and run it over your existing JSON / CSV / DB records.
+
 ---
 
 ## Flask Web UI
@@ -200,6 +262,7 @@ lipi/
 │   ├── preprocessor.py          # Convert + detect + post-process
 │   ├── extractor.py             # PDF text extraction (pypdf) + optional lexicon stage
 │   ├── correction.py            # HindiLexiconCorrector (bounded Levenshtein, suspicious-token heuristics)
+│   ├── text_pipeline.py         # Clean already-extracted raw text (safe/aggressive modes)
 │   ├── regression.py            # Page-by-page quality harness with quality metrics
 │   ├── splitter.py              # PDF splitting + batch processing
 │   ├── cli.py                   # Command-line interface (extract, split, info, regress)
@@ -262,6 +325,28 @@ lexicon second stage   <- optional, only on legacy-detected paths:
         v
 Unicode text: "के ारा थ कर रहा है"  <- ~85-92% accuracy (improves with lexicon stage)
 ```
+
+## Raw text pipeline
+
+When you no longer have the PDF and only have extracted text, the pipeline is simpler:
+
+```text
+raw extracted text
+        |
+        v
+detect_encoding() / detect_scrambled_devanagari()
+        |
+        v
+post_process()       <- remove duplicate marks, repair spacing, strip control chars
+        |
+        v
+lexicon stage        <- optional: safe or aggressive
+        |
+        v
+cleaned Hindi text + diagnostics (artifacts removed, correction stats)
+```
+
+This is exactly what `clean_extracted_text()` wraps.
 
 ---
 
