@@ -3,6 +3,7 @@ import os
 import json
 import glob
 import sys
+import re
 from datetime import datetime
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
@@ -30,6 +31,10 @@ app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+_LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
+_DEVA_LETTER_RE = re.compile(r"[\u0900-\u0963\u0970-\u097f]")
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +109,7 @@ def _summarize_extraction_result(
     has_encoding_issues: bool,
     detected_font_type: str,
     correct_encoding: bool,
+    latin_text_detected: bool,
 ) -> dict:
     """Build explicit comparison metadata for the Flask extraction UI."""
     raw_equals_corrected = raw_text == corrected_text
@@ -115,12 +121,33 @@ def _summarize_extraction_result(
         and detected_font_type not in ("unknown", "scrambled_devanagari")
     )
 
-    if not correct_encoding:
+    if latin_text_detected:
+        summary = (
+            "English / Latin text detected in this extracted chunk. No KrutiDev or "
+            "Chanakya issue was detected, so lipi-aparsoft kept the direct pypdf "
+            "extraction without attempting Hindi font conversion."
+        )
+        tone = "secondary"
+        status_label = "English / Latin text detected"
+        status_class = "bg-secondary"
+        font_label = ""
+        show_font_badge = False
+        diff_label = "No Hindi legacy conversion needed"
+        diff_class = "bg-secondary ms-1"
+        display_mode = "raw_only"
+    elif not correct_encoding:
         summary = (
             "Showing direct pypdf extraction only because lipi-aparsoft conversion "
             "was disabled for this request."
         )
         tone = "secondary"
+        status_label = "Raw pypdf extraction only"
+        status_class = "bg-secondary"
+        font_label = ""
+        show_font_badge = False
+        diff_label = "Conversion disabled"
+        diff_class = "bg-secondary ms-1"
+        display_mode = "comparison"
     elif legacy_conversion_applied:
         font_label = detected_font_type or "legacy"
         summary = (
@@ -129,6 +156,13 @@ def _summarize_extraction_result(
             "Unicode Devanagari."
         )
         tone = "success"
+        status_label = f"Legacy encoding detected — {font_label}"
+        status_class = "bg-warning text-dark"
+        font_label = font_label.capitalize()
+        show_font_badge = True
+        diff_label = "lipi-aparsoft changed the text"
+        diff_class = "bg-success ms-1"
+        display_mode = "comparison"
     elif scrambled_cleanup_applied:
         summary = (
             "pypdf already extracted Devanagari text, but the PDF's Unicode mapping was "
@@ -136,6 +170,13 @@ def _summarize_extraction_result(
             "other extraction artefacts without running legacy-font glyph conversion."
         )
         tone = "info"
+        status_label = "Scrambled Devanagari detected"
+        status_class = "bg-info text-dark"
+        font_label = "No legacy font"
+        show_font_badge = True
+        diff_label = "lipi-aparsoft changed the text"
+        diff_class = "bg-success ms-1"
+        display_mode = "comparison"
     elif conversion_applied:
         summary = (
             "pypdf already extracted Devanagari text, but lipi-aparsoft still improved "
@@ -143,29 +184,68 @@ def _summarize_extraction_result(
             "and broken-glyph repairs."
         )
         tone = "info"
+        status_label = "Unicode Hindi text detected"
+        status_class = "bg-success"
+        font_label = "No legacy font"
+        show_font_badge = True
+        diff_label = "lipi-aparsoft changed the text"
+        diff_class = "bg-success ms-1"
+        display_mode = "comparison"
     elif has_encoding_issues:
         summary = (
             "pypdf extracted raw legacy-looking text and lipi-aparsoft ran its cleanup "
             "pipeline, but the visible output stayed the same for this selection."
         )
         tone = "info"
+        status_label = "Legacy-looking text detected"
+        status_class = "bg-warning text-dark"
+        font_label = detected_font_type.capitalize() if detected_font_type not in (None, "unknown") else "Unknown"
+        show_font_badge = True
+        diff_label = "lipi-aparsoft kept the raw text"
+        diff_class = "bg-secondary ms-1"
+        display_mode = "comparison"
     else:
         summary = (
             "pypdf already extracted Devanagari text for this selection. lipi-aparsoft "
             "did not detect a legacy font, so the Unicode output matches the raw pypdf extraction."
         )
         tone = "secondary"
+        status_label = "Unicode / No issues"
+        status_class = "bg-success"
+        font_label = "No legacy font"
+        show_font_badge = True
+        diff_label = "lipi-aparsoft kept the raw text"
+        diff_class = "bg-secondary ms-1"
+        display_mode = "comparison"
 
     return {
         "raw_equals_corrected": raw_equals_corrected,
         "conversion_applied": conversion_applied,
         "legacy_conversion_applied": legacy_conversion_applied,
         "scrambled_cleanup_applied": scrambled_cleanup_applied,
+        "latin_text_detected": latin_text_detected,
         "comparison_tone": tone,
         "extraction_summary": summary,
+        "status_badge_label": status_label,
+        "status_badge_class": status_class,
+        "font_badge_label": font_label,
+        "show_font_badge": show_font_badge,
+        "diff_badge_label": diff_label,
+        "diff_badge_class": diff_class,
+        "display_mode": display_mode,
         "raw_char_count": len(raw_text),
         "unicode_char_count": len(corrected_text),
     }
+
+
+def _detect_latin_text_chunk(text: str) -> bool:
+    """Heuristic for English/Latin-dominant extraction chunks in the Flask UI."""
+    if not text:
+        return False
+
+    latin_count = len(_LATIN_LETTER_RE.findall(text))
+    devanagari_count = len(_DEVA_LETTER_RE.findall(text))
+    return latin_count >= 24 and latin_count >= max(8, devanagari_count * 4)
 
 
 # ---------------------------------------------------------------------------
@@ -330,12 +410,24 @@ def extract_pdf_text():
 
     raw_text = raw_result.get("full_text", "")
     corrected_text = converted_result.get("full_text", "")
+    latin_text_detected = _detect_latin_text_chunk(raw_text)
+
+    if latin_text_detected:
+        corrected_text = raw_text
+        converted_result = {
+            **converted_result,
+            "full_text": raw_text,
+            "has_encoding_issues": False,
+            "detected_font_type": "unknown",
+        }
+
     comparison = _summarize_extraction_result(
         raw_text=raw_text,
         corrected_text=corrected_text,
         has_encoding_issues=converted_result.get("has_encoding_issues", False),
         detected_font_type=converted_result.get("detected_font_type", "unknown"),
         correct_encoding=correct_encoding,
+        latin_text_detected=latin_text_detected,
     )
 
     return jsonify(
