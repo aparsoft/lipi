@@ -23,3 +23,12 @@ def test_clean_extracted_text_converts_legacy_font_input():
     assert result["has_encoding_issues"] is True
     assert result["stages_applied"] == ["convert:krutidev", "post_process"]
     assert any("\u0900" <= ch <= "\u097f" for ch in result["cleaned_text"])
+
+
+def test_clean_extracted_text_collapses_duplicated_auxiliary_tokens():
+    raw_text = "यह सही हैहै और वह वहाँ थाथा"
+
+    result = clean_extracted_text(raw_text, correction_mode="none")
+
+    assert result["cleaned_text"] == "यह सही है और वह वहाँ था"
+    assert result["stages_applied"] == ["post_process"]
