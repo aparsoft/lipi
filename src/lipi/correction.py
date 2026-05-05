@@ -166,6 +166,20 @@ class HindiLexiconCorrector:
             return candidate
         return None
 
+    def _repair_stray_imatra_insertion(self, token: str) -> Optional[str]:
+        """Drop one stray ि when that yields a unique exact lexicon match."""
+        if "ि" not in token:
+            return None
+
+        matches = {
+            token[:index] + token[index + 1 :]
+            for index, char in enumerate(token)
+            if char == "ि" and token[:index] + token[index + 1 :] in self.lexicon
+        }
+        if len(matches) == 1:
+            return next(iter(matches))
+        return None
+
     def _repair_structural_duplication(self, token: str) -> Optional[str]:
         """Repair repeated-halant / repeated-consonant noise when an exact candidate exists."""
         if not (
@@ -181,13 +195,17 @@ class HindiLexiconCorrector:
             return candidate
         return None
 
-    def _suggest(self, token: str) -> Optional[str]:
+    def _suggest_exact(self, token: str) -> Optional[str]:
         if token in self.lexicon:
             return token
 
         direct_swap_candidate = self._repair_direct_j_imatra_swap(token)
         if direct_swap_candidate:
             return direct_swap_candidate
+
+        direct_imatra_candidate = self._repair_stray_imatra_insertion(token)
+        if direct_imatra_candidate:
+            return direct_imatra_candidate
 
         direct_structural_candidate = self._repair_structural_duplication(token)
         if direct_structural_candidate:
@@ -200,6 +218,14 @@ class HindiLexiconCorrector:
         direct_matches = self._normalized_index.get(normalized)
         if direct_matches and len(direct_matches) == 1:
             return next(iter(direct_matches))
+        return None
+
+    def _suggest(self, token: str) -> Optional[str]:
+        exact_candidate = self._suggest_exact(token)
+        if exact_candidate:
+            return exact_candidate
+
+        normalized = _normalize_lookup_token(token)
         if (
             _LEADING_IMATRA_TOKEN_RE.search(token)
             or _J_IMATRA_SWAP_RE.search(token)
@@ -302,6 +328,15 @@ class HindiLexiconCorrector:
         def replace_token(match: re.Match) -> str:
             token = match.group(0)
             stats["tokens_seen"] += 1
+
+            exact_candidate = self._suggest_exact(token)
+            if exact_candidate and exact_candidate != token:
+                stats["tokens_considered"] += 1
+                stats["corrected_tokens"] += 1
+                if len(corrections) < 20:
+                    corrections.append({"from": token, "to": exact_candidate})
+                return exact_candidate
+
             if not self._should_consider(token, min_token_length):
                 return token
 
