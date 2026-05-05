@@ -50,6 +50,9 @@ _HALANT_DUPLICATE_CONSONANT_RE = re.compile(
 _DUPLICATE_CONSONANT_I_RE = re.compile(rf"([{_CONS_RANGE}])\1(?=[{_CONS_RANGE}]|[\u0901\u0902\u0903])")
 _SHCHA_IMATRA_RE = re.compile(r"श्श्ि")
 _NUKTA_BASE_RE = re.compile(r"([डढ])\1़")
+_DUPLICATE_AUXILIARY_RE = re.compile(
+    r"(?<![\u0900-\u097f])(है|हूँ|हैं|था|थी|थे)\1(?![\u0900-\u097f])"
+)
 
 # ---- Artefacts visible in already-Devanagari but font-corrupted PDFs ----
 # Stray SUB (0x1A) control characters from broken CMaps.
@@ -230,6 +233,7 @@ class HindiPreprocessor:
         text = _DUPLICATE_CONSONANT_I_RE.sub(r"\1ि", text)
         text = _SHCHA_IMATRA_RE.sub("श्चि", text)
         text = _NUKTA_BASE_RE.sub(_fix_decomposed_nukta_i, text)
+        text = _DUPLICATE_AUXILIARY_RE.sub(r"\1", text)
 
         corrections = [
             # -- Remove doubled matras --
