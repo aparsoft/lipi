@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.9] - 2026-05-05
+
+### Added
+- Added an opt-in candidate-generator pipeline in `lipi.candidates` so token rules can emit multiple repair candidates and let a scorer choose the winner instead of destructively rewriting text in place.
+- Added `SymSpellHindiCorrector` in `lipi.symspell_corrector` for frequency-weighted corpus-scale correction, plus optional `symspell` installation extras.
+- Added optional KenLM character-language-model support in `lipi.lm` for tie-breaking near-equal candidates, plus `lm` installation extras.
+- Added a multiprocessing corpus cleaner in `lipi.batch` and a new `lipi correct-corpus` CLI flow for batch-cleaning directories of pre-extracted text into JSONL output.
+- Added an optional transformer fallback in `lipi.ml_fallback` for the last low-confidence correction tier, plus `ml` installation extras.
+- Added corpus tooling for production workflows: `tools/build_frequency_lexicon.py` to build frequency dictionaries and `tools/train_kenlm.py` to train a Hindi character LM.
+- Added focused tests for candidate generation, corpus CLI flow, and SymSpell-backed correction.
+
+### Changed
+- Expanded Lipi from a PDF/text cleanup toolkit into a more scalable Hindi corpus-correction stack with layered correction options for lakhs of extracted files.
+- Kept the existing `clean_extracted_text()` path as the cheap default while documenting and exposing heavier opt-in layers for throughput, tie-breaking, and last-resort recovery.
+- Refreshed the README to document the new large-corpus flow, optional extras, `correct-corpus` CLI command, and recommended layer-by-layer rollout strategy.
+
+### Fixed
+- Reduced the need for destructive regex-only correction by introducing candidate scoring and opt-in external signals, which gives production pipelines a safer path for large-scale fuzzy cleanup.
+
 ## [1.0.7] - 2026-05-05
 
 ### Added
