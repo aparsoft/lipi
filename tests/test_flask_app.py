@@ -54,3 +54,52 @@ def test_extract_pdf_text_explains_unchanged_output_for_nonlegacy_pdf():
     assert payload["legacy_conversion_applied"] is False
     assert payload["scrambled_cleanup_applied"] is True
     assert "scrambled" in payload["extraction_summary"]
+
+
+def test_extract_pdf_text_suppresses_legacy_story_for_english_chunks(monkeypatch):
+    english_text = (
+        "I Complete the given word web. Read the questions given below and share your "
+        "answers with your classmates and teacher."
+    )
+
+    def fake_extract_unicode_text(file_path, page_range=None, font_type="auto", post_process=True):
+        if font_type == "none" and post_process is False:
+            return {
+                "full_text": english_text,
+                "total_pages": 1,
+                "has_encoding_issues": False,
+                "detected_font_type": "unknown",
+            }
+
+        return {
+            "full_text": "एडस फेक कन्वर्जन",
+            "total_pages": 1,
+            "has_encoding_issues": True,
+            "detected_font_type": "krutidev",
+        }
+
+    monkeypatch.setattr("web.flask_app.extract_unicode_text", fake_extract_unicode_text)
+
+    with app.test_client() as client:
+        response = client.post(
+            "/extract_pdf_text",
+            data={
+                "pdf_file": (io.BytesIO(b"%PDF-1.4\n%fake\n"), "english.pdf"),
+                "font_type": "auto",
+                "correct_encoding": "true",
+                "page_range": "1-1",
+            },
+            content_type="multipart/form-data",
+        )
+
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["latin_text_detected"] is True
+    assert payload["display_mode"] == "raw_only"
+    assert payload["has_encoding_issues"] is False
+    assert payload["raw_equals_corrected"] is True
+    assert payload["conversion_applied"] is False
+    assert payload["corrected_text"] == english_text
+    assert "English / Latin text detected" in payload["extraction_summary"]
