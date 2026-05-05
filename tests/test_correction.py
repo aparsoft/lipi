@@ -84,6 +84,13 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "व्यक्ति बिना"
         assert result["stats"]["corrected_tokens"] == 0
 
+    def test_default_lexicon_preserves_vyakti_but_fixes_common_textbook_noise(self):
+        corrector = HindiLexiconCorrector(max_distance=0)
+        result = corrector.correct_text("व्यक्ति दीववार चुनावव गौरवव", min_token_length=1)
+
+        assert result["text"] == "व्यक्ति दीवार चुनाव गौरव"
+        assert result["stats"]["corrected_tokens"] == 3
+
     def test_full_range_repeated_consonants_can_resolve_by_exact_match(self):
         corrector = HindiLexiconCorrector(
             lexicon_words={"विशेष", "शब्द", "शब्दों", "संपूर्ण", "नागार्जुन", "आठ"},
