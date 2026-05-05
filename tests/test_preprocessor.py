@@ -139,6 +139,11 @@ class TestPostProcess:
         assert HindiPreprocessor.post_process("दृश््योों") == "दृश्यों"
         assert HindiPreprocessor.post_process("वृत््ताांांत") == "वृत्तांत"
 
+    def test_collapses_duplicated_auxiliary_tokens(self):
+        assert HindiPreprocessor.post_process("यह सही हैहै?") == "यह सही है?"
+        assert HindiPreprocessor.post_process("वह वहाँ थाथा") == "वह वहाँ था"
+        assert HindiPreprocessor.post_process("क्याक्या") == "क्याक्या"
+
     def test_empty_string(self):
         assert HindiPreprocessor.post_process("") == ""
 
