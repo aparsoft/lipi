@@ -35,6 +35,35 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
 _DEVA_LETTER_RE = re.compile(r"[\u0900-\u0963\u0970-\u097f]")
+_LATIN_WORD_RE = re.compile(r"[A-Za-z]{2,}")
+_COMMON_ENGLISH_WORDS = {
+    "a",
+    "an",
+    "and",
+    "answers",
+    "below",
+    "complete",
+    "do",
+    "family",
+    "for",
+    "given",
+    "in",
+    "is",
+    "it",
+    "questions",
+    "read",
+    "respond",
+    "share",
+    "teacher",
+    "that",
+    "the",
+    "to",
+    "what",
+    "with",
+    "word",
+    "you",
+    "your",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +278,12 @@ def _detect_latin_text_chunk(text: str) -> bool:
 
     latin_count = len(_LATIN_LETTER_RE.findall(text))
     devanagari_count = len(_DEVA_LETTER_RE.findall(text))
-    return latin_count >= 24 and latin_count >= max(8, devanagari_count * 4)
+    if not (latin_count >= 24 and latin_count >= max(8, devanagari_count * 4)):
+        return False
+
+    words = [word.lower() for word in _LATIN_WORD_RE.findall(text)]
+    english_hits = sum(word in _COMMON_ENGLISH_WORDS for word in words)
+    return english_hits >= 3
 
 
 # ---------------------------------------------------------------------------
