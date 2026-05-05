@@ -43,6 +43,10 @@ _MARK_TRAILING_SPACING_RE = re.compile(
     f"([{_CONS_RANGE}\u0958-\u095f])\\s+([{_DEVA_MARKS}])\\s+"
 )
 _HALANT_SPACING_RE = re.compile(r"(्)\s+([\u0900-\u097f])")
+_DUPLICATE_HALANT_RE = re.compile(r"्{2,}")
+_HALANT_DUPLICATE_CONSONANT_RE = re.compile(
+    rf"्([{_CONS_RANGE}\u0958-\u095f])\1"
+)
 _DUPLICATE_CONSONANT_I_RE = re.compile(rf"([{_CONS_RANGE}])\1(?=[{_CONS_RANGE}]|[\u0901\u0902\u0903])")
 _SHCHA_IMATRA_RE = re.compile(r"श्श्ि")
 _NUKTA_BASE_RE = re.compile(r"([डढ])\1़")
@@ -56,6 +60,7 @@ _STRAY_ZWJ_RE = re.compile(f"\u200d(?=[{_DEVA_MARKS}])|(?<=[{_DEVA_MARKS}])\u200
 _LEADING_MATRA_RE = re.compile(rf"(^|\s)([{_DEVA_MARKS}])(?=[{_CONS_RANGE}])")
 # Doubled e-matra immediately before anusvara (e.g. 'मेें' → 'में').
 _DOUBLE_E_BEFORE_ANUSVARA_RE = re.compile("\u0947\u0947(?=\u0902)")
+_DUPLICATE_MARK_CLUSTER_RE = re.compile(r"([ािीुूृेैोौ][ँं])\1+")
 
 _NUKTA_I_REPLACEMENTS = {
     "ड": "ड़",
@@ -214,6 +219,8 @@ class HindiPreprocessor:
         # Strip control chars and stray ZWJ first so downstream regexes match cleanly.
         text = _CTRL_SUB_RE.sub("", text)
         text = _STRAY_ZWJ_RE.sub("", text)
+        text = _DUPLICATE_HALANT_RE.sub("्", text)
+        text = _HALANT_DUPLICATE_CONSONANT_RE.sub(r"्\1", text)
         text = _DOUBLE_E_BEFORE_ANUSVARA_RE.sub("\u0947", text)
         # 'C े ' → 'Cे ' (collapse trailing space too) before the simple variant.
         text = _MARK_TRAILING_SPACING_RE.sub(r"\1\2 ", text)
@@ -248,6 +255,9 @@ class HindiPreprocessor:
 
         for pattern, replacement in corrections:
             text = re.sub(pattern, replacement, text)
+
+        # Collapse repeated matra+nasal clusters such as 'ांां' -> 'ां'.
+        text = _DUPLICATE_MARK_CLUSTER_RE.sub(r"\1", text)
         return text
 
     # ------------------------------------------------------------------ #
