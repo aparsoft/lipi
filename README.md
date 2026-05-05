@@ -58,6 +58,15 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 # Core (PDF splitting + text extraction)
 pip install lipi-aparsoft
 
+# Optional: SymSpell-backed corrector for very large corpora
+pip install "lipi-aparsoft[symspell]"
+
+# Optional: KenLM character LM tiebreaker (auto-downloads model on first use)
+pip install "lipi-aparsoft[lm]"
+
+# Optional: ML fallback (transformers + torch, ~500 MB)
+pip install "lipi-aparsoft[ml]"
+
 # With Flask web UI
 pip install "lipi-aparsoft[flask]"
 
@@ -234,6 +243,83 @@ lipi regress temp/jhkr102.pdf --bootstrap-lexicon
 ```
 
 For already-extracted text, use `clean_extracted_text()` from Python and run it over your existing JSON / CSV / DB records.
+
+---
+
+## Scaling to large corpora (lakhs of pages)
+
+The original regex-based corrector is fast but hard to scale beyond moderate corpora because its rules apply destructively. Lipi 1.0.9 ships an opt-in pipeline designed for production use without breaking the existing `clean_extracted_text` API.
+
+### 1. Candidate-generator architecture (`lipi.candidates`)
+
+Every per-token rule emits one or more `Candidate` transforms (each carrying a `confidence` and a `reason`). A scorer picks the winner using an external `ScoringContext` (lexicon + frequency + optional LM). The original token is always a candidate, so a spurious rule fire can be vetoed by the lexicon.
+
+```python
+from lipi.candidates import correct_text, build_lexicon_context
+
+context = build_lexicon_context(lexicon={"जन्म", "रुककर"})
+cleaned, stats = correct_text("जन््मम और रुककर", context=context)
+# cleaned == "जन्म और रुककर"  — real geminate preserved, artefact collapsed
+```
+
+### 2. SymSpell-backed corrector (`lipi.symspell_corrector`)
+
+O(1) lookups against a frequency-weighted Hindi dictionary. Use this when fuzzy correction over millions of tokens is too slow with `HindiLexiconCorrector`.
+
+```python
+from lipi.symspell_corrector import SymSpellHindiCorrector
+corrector = SymSpellHindiCorrector.from_default_dictionary(max_dictionary_edit_distance=2)
+cleaned, stats = corrector.correct("स्वतंत्रता के बारे मे")
+```
+
+Build a real frequency dictionary from your own corpus:
+
+```bash
+python tools/build_frequency_lexicon.py corpus/*.txt -o my_hindi_freq.txt --min-count 5
+```
+
+### 3. Optional KenLM character LM tiebreaker (`lipi.lm`)
+
+Char-3gram model used only as a tiebreaker between near-equal candidates. Auto-downloads to `~/.cache/lipi/` on first use (override path via `LIPI_CACHE_DIR`, URL via `LIPI_LM_URL`). Train your own with:
+
+```bash
+python tools/train_kenlm.py corpus/*.txt -o hindi_char_3gram.arpa --order 3
+```
+
+### 4. Parallel batch processor (`lipi.batch`)
+
+Pool-based multiprocessing over a directory of pre-extracted text files. Each worker initialises its corrector once and reuses it across files.
+
+```bash
+lipi correct-corpus ./extracted_text \
+    -o cleaned_corpus.jsonl \
+    --correction-mode safe \
+    --use-symspell \
+    --workers 8
+```
+
+Output is JSONL — one row per file with `cleaned_text`, byte-level diff stats, and any per-file errors. Pipe into `jq` or DuckDB for triage.
+
+### 5. ML fallback for the last 5% (`lipi.ml_fallback`)
+
+For low-confidence tokens that none of the above could resolve, route them through a transformer (default: `ai4bharat/IndicBART`). This is heavy (~500 MB model, CPU-slow) and is intended only for the small subset of tokens flagged by upstream layers.
+
+```python
+from lipi.ml_fallback import IndicBARTSpellCorrector
+fallback = IndicBARTSpellCorrector()
+fixed = fallback.correct_token("परराधीनता", context_left="महान राष्ट्र की", context_right="के दिनों")
+```
+
+### Putting it together
+
+| Layer                              | Cost          | When to enable                                         |
+|------------------------------------|---------------|--------------------------------------------------------|
+| `clean_extracted_text` (default)   | Cheap         | Always — handles legacy fonts + safe normalisation     |
+| `lipi.candidates.correct_text`     | Cheap         | When you have a domain lexicon to enforce              |
+| `SymSpellHindiCorrector`           | Medium        | Corpus-wide fuzzy correction over millions of tokens   |
+| `CharKenLM` tiebreaker             | Medium        | When two candidates score equally and damage is costly |
+| `lipi.batch.run_batch`             | Scales to CPU | Anything > a few hundred files                         |
+| `IndicBARTSpellCorrector`          | Heavy         | The final 5% of low-confidence tokens                  |
 
 ---
 
