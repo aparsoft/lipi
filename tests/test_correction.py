@@ -47,6 +47,20 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "मेारो"
         assert result["stats"]["corrected_tokens"] == 0
 
+    def test_repairs_structural_duplication_when_exact_candidate_exists(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"वाक्यों", "जन्म", "यात्रा", "किया", "वृत्तांत"})
+        result = corrector.correct_text("वाक््यों जन््मम ययात्रा कियया वृत््ताांांत")
+
+        assert result["text"] == "वाक्यों जन्म यात्रा किया वृत्तांत"
+        assert result["stats"]["corrected_tokens"] == 5
+
+    def test_structural_duplication_without_exact_match_does_not_fuzzy_jump(self):
+        corrector = HindiLexiconCorrector(lexicon_words={"वादियों", "स्थगित", "स्थल"})
+        result = corrector.correct_text("वाक््यों")
+
+        assert result["text"] == "वाक््यों"
+        assert result["stats"]["corrected_tokens"] == 0
+
 
 class TestBuildContextualLexicon:
     def test_collects_repeated_clean_tokens(self):
