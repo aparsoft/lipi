@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.6] - 2026-05-05
+
+### Added
+- Added `clean_extracted_text()` so already-extracted Hindi text can be cleaned without reopening the original PDFs, with `safe`, `aggressive`, and optional contextual lexicon bootstrapping modes.
+- Added `scrambled_devanagari` detection and artifact diagnostics for Unicode-looking PDF text that is still corrupted by broken extraction.
+- Added broader textbook and prose Hindi lexicon coverage plus new regression tests for raw-text cleanup, exact-match repairs, and false-positive prevention.
+
+### Changed
+- Expanded the package from a PDF-only converter into a more general Hindi ETL cleanup pipeline for both PDF extraction output and existing raw text corpora.
+- Safe cleanup now prefers exact normalized repairs for scrambled Devanagari noise, including repeated consonants, repeated halants, common `ज`/`ि` swap corruption, and tightly scoped stray `ि` repair.
+- Generic post-processing now cleans more Unicode extraction artefacts before lexicon correction, including duplicated auxiliary forms such as `हैहै -> है`.
+- Local demo and test paths now resolve the checkout `src/` tree consistently, so validation runs against the current code instead of a stale installed wheel.
+
+### Fixed
+- Fixed false-positive safe corrections where one valid Hindi word could be rewritten to another valid Hindi word, including cases such as `व्यक्ति -> व्यक्त` and `बिना -> बना`.
+- Prevented unsafe fuzzy jumps on structurally corrupted tokens unless an exact normalized lexicon candidate exists.
+- Fixed raw-text demo reporting so correction samples and cleaned output reflect the actual pipeline behavior.
+
 ## [1.0.2] - 2026-05-02
 
 ### Changed

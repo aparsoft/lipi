@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lipi-aparsoft"
-version = "1.0.5"
+version = "1.0.6"
 description = "Legacy Hindi font (KrutiDev/Chanakya) to Unicode Devanagari toolkit with PDF splitting"
 readme = "README.md"
 license = "MIT"
