@@ -19,7 +19,10 @@ _J_IMATRA_SWAP_RE = re.compile(r"ज((?:[क-ह]्)*[क-ह])")
 _ZERO_WIDTH_RE = re.compile(r"[\u200c\u200d]")
 _DUPLICATE_HALANT_RE = re.compile(r"्{2,}")
 _HALANT_DUPLICATE_CONSONANT_RE = re.compile(r"्([क-हक़-य़])\1")
-_REPEATED_BASE_CONSONANT_RE = re.compile(r"([यवनमतलसकगदपबरह])\1")
+# Full repeated-base consonant collapse is safe here because it is only used
+# for exact normalized lexicon hits; tokens with no exact candidate are not
+# allowed to fall through into fuzzy correction.
+_REPEATED_BASE_CONSONANT_RE = re.compile(r"([क-हक़-य़])\1")
 _DUPLICATE_MARK_CLUSTER_RE = re.compile(r"([ािीुूृेैोौ][ँं])\1+")
 _LOOKUP_SEQUENCE_REPLACEMENTS = (
     ("ांे", "ों"),
