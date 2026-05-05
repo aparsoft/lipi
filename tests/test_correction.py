@@ -61,6 +61,16 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "वाक््यों"
         assert result["stats"]["corrected_tokens"] == 0
 
+    def test_full_range_repeated_consonants_can_resolve_by_exact_match(self):
+        corrector = HindiLexiconCorrector(
+            lexicon_words={"विशेष", "शब्द", "शब्दों", "संपूर्ण", "नागार्जुन", "आठ"},
+            max_distance=0,
+        )
+        result = corrector.correct_text("विशशेष शशब््दद शशब््दोों ससंपूर्ण ननागार्जजुनन आठठ")
+
+        assert result["text"] == "विशेष शब्द शब्दों संपूर्ण नागार्जुन आठ"
+        assert result["stats"]["corrected_tokens"] == 6
+
 
 class TestBuildContextualLexicon:
     def test_collects_repeated_clean_tokens(self):
