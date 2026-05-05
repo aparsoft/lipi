@@ -141,6 +141,7 @@ class TestPostProcess:
 
     def test_collapses_duplicated_auxiliary_tokens(self):
         assert HindiPreprocessor.post_process("यह सही हैहै?") == "यह सही है?"
+        assert HindiPreprocessor.post_process("प्रश्न हैहै।") == "प्रश्न है।"
         assert HindiPreprocessor.post_process("वह वहाँ थाथा") == "वह वहाँ था"
         assert HindiPreprocessor.post_process("क्याक्या") == "क्याक्या"
 
