@@ -60,7 +60,15 @@ def clean_extracted_text(
         stages_applied.append(f"convert:{effective_font_type}")
 
     if cleaned_text and effective_font_type != "none":
-        cleaned_text = HindiPreprocessor.post_process(cleaned_text)
+        # The CC -> Cि repair is correct ONLY for legacy-font extraction where
+        # a lost ि-matra surfaces as a doubled consonant. For clean / scrambled
+        # Devanagari it damages real Hindi (रुककर, महाकुंभ, समझ, हमला) — leave
+        # those tokens to the lexicon stage.
+        legacy_font_path = effective_font_type in ("krutidev", "chanakya", "walkman_chanakya")
+        cleaned_text = HindiPreprocessor.post_process(
+            cleaned_text,
+            repair_doubled_consonant_imatra=legacy_font_path,
+        )
         stages_applied.append("post_process")
 
     correction_stats = {
