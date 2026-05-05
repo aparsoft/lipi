@@ -6,21 +6,23 @@
 [![PyPI](https://img.shields.io/pypi/v/lipi-aparsoft)](https://pypi.org/project/lipi-aparsoft/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)](https://github.com/aparsoft/lipi)
+[![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen)](https://github.com/aparsoft/lipi)
 
 ---
 
-## Decode legacy Hindi/Indic PDFs. KrutiDev, Chanakya → Unicode.
+## Decode legacy Hindi PDFs and clean noisy extracted text. KrutiDev, Chanakya, scrambled Devanagari → Unicode.
 
 ## What this does
 
 1. **Split PDFs by page range** - extract chapters, lectures, or units out of a large PDF into separate files, with optional batch processing via a JSON config.
 
-2. **Extract Unicode text from legacy Hindi-font PDFs** - detect KrutiDev / Chanakya encoded PDFs and convert the extracted text to proper Unicode Devanagari, making it searchable, copy-pasteable, and usable in NLP pipelines.
+2. **Extract and normalize Hindi PDF text** - detect KrutiDev / Chanakya encoded PDFs, handle `scrambled_devanagari` Unicode extraction artefacts, and produce cleaner Unicode Devanagari that is searchable, copy-pasteable, and usable in NLP pipelines.
 
-3. **Optional second-stage lexicon correction** - a conservative, heuristic pass that catches noisy tokens the character-level mapping misses, using bounded Levenshtein distance against a built-in Hindi word list.
+3. **Safer second-stage correction modes** - use `safe` exact normalized corrections for bulk cleanup, or `aggressive` bounded fuzzy correction when you are reviewing output more closely.
 
 4. **Clean already-extracted raw text** - if the PDF is gone and you only have noisy text in a database / JSON / CSV dump, reuse the same cleanup stack directly on that text.
+
+5. **Use a smarter web extractor UI** - the Flask app shows raw-vs-cleaned comparison for Hindi extraction when it is meaningful, but keeps English / Latin chunks in a neutral single extracted-text view.
 
 ### Common use cases
 
@@ -45,7 +47,8 @@ This toolkit detects that situation and applies a character-level reverse-mappin
 | **Conversion is ~85-92% accurate** | KrutiDev glyph mapping is context-free. Some characters (e.g. `k`) can be the `ा` matra *or* part of a consonant cluster. Perfect accuracy requires a context-aware parser or an LLM correction pass. |
 | **PDF fonts are NOT re-encoded** | `split_pdf()` copies pages byte-for-byte. The output PDFs will still render correctly in viewers, but the underlying bytes remain in the legacy encoding. Use `extract_unicode_text()` when you need the text, not the file. |
 | **Chanakya support is partial** | The Chanakya mapping covers the most common characters. Documents using uncommon ligatures or regional variants may need manual review. |
-| **Second-stage correction is heuristic** | The optional lexicon pass is off by default and only runs on legacy-detected extraction paths. It can improve noisy KrutiDev output, but it is still a heuristic layer and should be reviewed on important documents. |
+| **Safe mode is intentionally conservative** | `clean_extracted_text(..., correction_mode="safe")` prefers exact normalized matches and is designed to avoid rewriting one valid Hindi word into another. Some noisy tokens are intentionally left untouched until a stronger exact signal exists. |
+| **Aggressive correction is heuristic** | The bounded fuzzy pass can improve messy output, but it should be reviewed on important documents or high-value publishing flows. |
 
 ---
 
@@ -102,7 +105,7 @@ print(result["has_encoding_issues"])   # True
 print(result["detected_font_type"])    # "krutidev"
 print(result["full_text"][:500])       # Clean Devanagari Unicode
 
-# Optional second-stage lexicon correction for legacy-detected PDFs
+# Optional second-stage lexicon correction for legacy or scrambled Hindi PDFs
 improved = extract_unicode_text(
         "old_hindi_textbook.pdf",
         second_stage="lexicon",
@@ -246,10 +249,14 @@ Features:
 - Upload & preview PDF info (page count, size, encoding detection)
 - Single PDF splitting with named ranges
 - Batch directory processing with JSON config
-- Hindi text extraction with **before/after comparison** (raw pypdf vs lipi-aparsoft output)
+- Hindi text extraction with smart presentation: raw-vs-cleaned comparison for Hindi legacy/scrambled pages, and a neutral single extracted-text view for English / Latin chunks
 - Conversion summary badges (legacy detected, text changed, etc.)
 - JSON config editor
 - Output file browser with download/delete
+
+Single-PDF extraction behavior:
+- Legacy or scrambled Hindi pages: show exact raw `pypdf` output first, then the cleaned `lipi-aparsoft` output.
+- English / Latin chunks: keep the direct `pypdf` extraction and suppress fake KrutiDev / Chanakya conversion framing.
 
 ---
 
@@ -274,7 +281,7 @@ lipi/
 │       ├── chanakya.py          # Chanakya → Unicode table
 │       └── walkman_chanakya.py  # Walkman-Chanakya905 overrides
 ├── web/
-│   ├── flask_app.py             # Flask web UI (dual extraction + comparison)
+│   ├── flask_app.py             # Flask web UI (smart extraction comparison + English chunk fallback)
 │   └── templates/               # HTML templates
 ├── tests/
 │   ├── test_mappings.py         # Mapping tables: loading, merging, value validation
@@ -312,10 +319,11 @@ post_process()         <- generic Unicode cleanup:
                            - fix duplicate consonant+i-matra (कक→कि, ववक→विक)
                            - fix श्श्ि → श्चि
                            - fix decomposed nukta+i (डड़→ड़ि)
+                           - collapse duplicated auxiliaries (हैहै→है)
                            - fix common words (अौर→और, अार→आर)
         |
         v
-lexicon second stage   <- optional, only on legacy-detected paths:
+lexicon second stage   <- optional for legacy or scrambled Hindi PDF paths:
   (HindiLexiconCorrector)
                            - split text into tokens
                            - detect suspicious tokens (nonstandard nukta, duplicate marks)

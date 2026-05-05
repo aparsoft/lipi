@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.7] - 2026-05-05
+
+### Added
+- Added Single PDF web extraction behavior for English / Latin chunks so the Flask UI can show a neutral extracted-text view instead of pretending a KrutiDev or Chanakya conversion happened.
+- Added focused Flask route coverage for the English / Latin extraction path in addition to the existing legacy and scrambled-Devanagari tests.
+
+### Changed
+- `HindiPreprocessor.post_process()` now collapses duplicated auxiliary forms such as `हैहै -> है` and `थाथा -> था` when they appear as standalone token duplication artefacts.
+- Refreshed the README to document the broader Hindi ETL pipeline, safe versus aggressive cleanup, scrambled Devanagari handling, and the smarter web UI extraction behavior.
+
+### Fixed
+- Fixed the Flask extraction UI so English PDFs no longer show misleading legacy-font badges or bogus lipi-aparsoft conversion framing.
+- Fixed duplicated auxiliary cleanup around Hindi danda punctuation so cases such as `हैहै।` normalize correctly.
+
 ## [1.0.6] - 2026-05-05
 
 ### Added

@@ -9,7 +9,7 @@ from lipi.preprocessor import HindiPreprocessor
 from lipi.regression import run_regression_harness
 from lipi.text_pipeline import clean_extracted_text
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 __all__ = [
     "HindiPreprocessor",
     "HindiLexiconCorrector",
