@@ -33,6 +33,7 @@ _IMATRA_REORDER_RE = re.compile(
     + _IMATRA
     + f"((?:[{_CONS_RANGE}]{_HALANT})*[{_CONS_RANGE}])"
 )
+_DEVA_TOKEN_CHARS = "\u0900-\u0963\u0970-\u097f"
 _DEVA_MARKS = "\u093c\u0901\u0902\u0903\u093e\u093f\u0940\u0941\u0942\u0943\u0947\u0948\u0949\u094b\u094c\u094d"
 # Only attach a stranded matra back to a CONSONANT (not to another matra) — prevents
 # joining two separate words when both happen to end/start with a matra-like glyph.
@@ -51,7 +52,7 @@ _DUPLICATE_CONSONANT_I_RE = re.compile(rf"([{_CONS_RANGE}])\1(?=[{_CONS_RANGE}]|
 _SHCHA_IMATRA_RE = re.compile(r"श्श्ि")
 _NUKTA_BASE_RE = re.compile(r"([डढ])\1़")
 _DUPLICATE_AUXILIARY_RE = re.compile(
-    r"(?<![\u0900-\u097f])(है|हूँ|हैं|था|थी|थे)\1(?![\u0900-\u097f])"
+    rf"(?<![{_DEVA_TOKEN_CHARS}])(है|हूँ|हैं|था|थी|थे)\1(?![{_DEVA_TOKEN_CHARS}])"
 )
 
 # ---- Artefacts visible in already-Devanagari but font-corrupted PDFs ----
