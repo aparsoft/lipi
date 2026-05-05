@@ -133,6 +133,12 @@ class TestPostProcess:
         assert HindiPreprocessor.post_process("श्श्िम") == "श्चिम"
         assert HindiPreprocessor.post_process("डड़त") == "ड़ित"
 
+    def test_repairs_repeated_halant_and_mark_clusters(self):
+        assert HindiPreprocessor.post_process("जन््मम") == "जन्म"
+        assert HindiPreprocessor.post_process("स््थथित") == "स्थित"
+        assert HindiPreprocessor.post_process("दृश््योों") == "दृश्यों"
+        assert HindiPreprocessor.post_process("वृत््ताांांत") == "वृत्तांत"
+
     def test_empty_string(self):
         assert HindiPreprocessor.post_process("") == ""
 
