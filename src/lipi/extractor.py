@@ -204,7 +204,11 @@ def extract_unicode_text(
                     raw = HindiPreprocessor.convert(raw, font_type)
 
                 if raw and post_process and font_type != "none":
-                    raw = HindiPreprocessor.post_process(raw)
+                    raw = HindiPreprocessor.post_process(
+                        raw,
+                        repair_doubled_consonant_imatra=font_type
+                        in ("krutidev", "chanakya", "walkman_chanakya"),
+                    )
 
                 if raw and overrides:
                     raw, override_count = _apply_text_overrides(raw, page_num, overrides)
