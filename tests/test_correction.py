@@ -61,12 +61,28 @@ class TestHindiLexiconCorrector:
         assert result["text"] == "वाक््यों"
         assert result["stats"]["corrected_tokens"] == 0
 
+    def test_repairs_exact_stray_imatra_insertions(self):
+        corrector = HindiLexiconCorrector(
+            lexicon_words={"शब्द", "शब्दों", "यह", "यही", "यथार्थता", "उनकी", "शायद", "सुनकर", "आनंद"},
+            max_distance=0,
+        )
+        result = corrector.correct_text(
+            "शिब्द शिब्दों यिह यिही यिथार्थता उनिकी शायिद सुनिकर आनिंद",
+            min_token_length=1,
+        )
+
+        assert result["text"] == "शब्द शब्दों यह यही यथार्थता उनकी शायद सुनकर आनंद"
+        assert result["stats"]["corrected_tokens"] == 9
+
     def test_full_range_repeated_consonants_can_resolve_by_exact_match(self):
         corrector = HindiLexiconCorrector(
             lexicon_words={"विशेष", "शब्द", "शब्दों", "संपूर्ण", "नागार्जुन", "आठ"},
             max_distance=0,
         )
-        result = corrector.correct_text("विशशेष शशब््दद शशब््दोों ससंपूर्ण ननागार्जजुनन आठठ")
+        result = corrector.correct_text(
+            "विशशेष शशब््दद शशब््दोों ससंपूर्ण ननागार्जजुनन आठठ",
+            min_token_length=1,
+        )
 
         assert result["text"] == "विशेष शब्द शब्दों संपूर्ण नागार्जुन आठ"
         assert result["stats"]["corrected_tokens"] == 6
