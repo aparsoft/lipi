@@ -127,7 +127,7 @@
                                     <span id="extraction-diff" class="badge ms-1"></span>
                                     </div>
                                     <div id="extraction-summary" class="alert alert-secondary py-2 mb-3"></div>
-                                    <div class="row g-2 mb-3 small text-muted">
+                                    <div id="extraction-steps" class="row g-2 mb-3 small text-muted">
                                         <div class="col-md-6">
                                             <strong>Step 1:</strong> show the exact text extracted by <code>pypdf</code>.
                                             <span id="raw-char-count" class="ms-1"></span>
@@ -145,14 +145,18 @@
                                         <i class="fas fa-copy"></i> Copy Unicode Text
                                     </button>
                                 </div>
-                                <label class="form-label"><strong>1. Raw pypdf Extracted Text</strong> <span class="text-muted small">(exact extraction
-                                        before lipi-aparsoft touches it)</span></label>
-                                <pre id="raw-text-preview" class="bg-light p-3 rounded border border-warning"
-                                    style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;"></pre>
+                                <div id="raw-output-group">
+                                    <label id="raw-output-label" class="form-label"><strong>1. Raw pypdf Extracted Text</strong> <span class="text-muted small">(exact extraction
+                                            before lipi-aparsoft touches it)</span></label>
+                                    <pre id="raw-text-preview" class="bg-light p-3 rounded border border-warning"
+                                        style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;"></pre>
+                                </div>
 
-                                <label class="form-label"><strong>2. lipi-aparsoft Unicode Output</strong> <span class="text-muted small">(after
-                                        detection, conversion, and cleanup)</span></label>
-                                <pre id="unicode-text-preview" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
+                                <div id="unicode-output-group">
+                                    <label id="unicode-output-label" class="form-label"><strong>2. lipi-aparsoft Unicode Output</strong> <span class="text-muted small">(after
+                                            detection, conversion, and cleanup)</span></label>
+                                    <pre id="unicode-text-preview" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -643,6 +647,7 @@
                     if (response.success) {
                         extractedRawText = response.raw_text || '';
                         extractedUnicodeText = response.corrected_text || '';
+                        const rawOnlyMode = response.display_mode === 'raw_only';
 
                         $('#extraction-result').show();
                         $('#extraction-summary')
@@ -652,19 +657,30 @@
                         $('#raw-char-count').text('(' + (response.raw_char_count || extractedRawText.length) + ' chars)');
                         $('#unicode-char-count').text('(' + (response.unicode_char_count || extractedUnicodeText.length) + ' chars)');
 
-                        if (response.has_encoding_issues) {
-                            $('#extraction-status').attr('class', 'badge bg-warning text-dark').text('Legacy encoding detected — ' + (response.detected_font_type || 'unknown'));
-                        } else {
-                            $('#extraction-status').attr('class', 'badge bg-success').text('Unicode / No issues');
-                        }
+                        $('#extraction-status')
+                            .attr('class', 'badge ' + (response.status_badge_class || 'bg-success'))
+                            .text(response.status_badge_label || 'Unicode / No issues');
 
-                        const font = response.detected_font_type || 'unknown';
-                        $('#extraction-font').text(font === 'unknown' ? 'No legacy font' : font.charAt(0).toUpperCase() + font.slice(1));
+                        $('#extraction-font')
+                            .text(response.font_badge_label || '')
+                            .toggle(!!response.show_font_badge);
 
-                        if (response.conversion_applied) {
-                            $('#extraction-diff').attr('class', 'badge bg-success ms-1').text('lipi-aparsoft changed the text');
+                        $('#extraction-diff')
+                            .attr('class', 'badge ' + (response.diff_badge_class || 'bg-secondary ms-1'))
+                            .text(response.diff_badge_label || 'lipi-aparsoft kept the raw text');
+
+                        $('#extraction-steps').toggle(!rawOnlyMode);
+                        $('#unicode-output-group').toggle(!rawOnlyMode);
+                        $('#toggle-raw-text').toggle(!rawOnlyMode);
+
+                        if (rawOnlyMode) {
+                            $('#raw-output-label').html('<strong>Extracted Text</strong> <span class="text-muted small">(English / Latin chunk detected; no Hindi legacy conversion applied)</span>');
+                            $('#copy-unicode-text').html('<i class="fas fa-copy"></i> Copy Extracted Text');
+                            $('#raw-text-preview').removeClass('border border-warning');
                         } else {
-                            $('#extraction-diff').attr('class', 'badge bg-secondary ms-1').text('lipi-aparsoft kept the raw text');
+                            $('#raw-output-label').html('<strong>1. Raw pypdf Extracted Text</strong> <span class="text-muted small">(exact extraction before lipi-aparsoft touches it)</span>');
+                            $('#copy-unicode-text').html('<i class="fas fa-copy"></i> Copy Unicode Text');
+                            $('#raw-text-preview').addClass('border border-warning');
                         }
 
                         // Raw text: always show so the pypdf vs lipi-aparsoft comparison is explicit
