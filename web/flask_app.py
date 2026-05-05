@@ -199,7 +199,11 @@ def _summarize_extraction_result(
         tone = "info"
         status_label = "Legacy-looking text detected"
         status_class = "bg-warning text-dark"
-        font_label = detected_font_type.capitalize() if detected_font_type not in (None, "unknown") else "Unknown"
+        font_label = (
+            detected_font_type.capitalize()
+            if detected_font_type not in (None, "unknown")
+            else "Unknown"
+        )
         show_font_badge = True
         diff_label = "lipi-aparsoft kept the raw text"
         diff_class = "bg-secondary ms-1"
@@ -410,7 +414,8 @@ def extract_pdf_text():
 
     raw_text = raw_result.get("full_text", "")
     corrected_text = converted_result.get("full_text", "")
-    latin_text_detected = _detect_latin_text_chunk(raw_text)
+    raw_has_legacy_encoding, _ = HindiPreprocessor.detect_encoding(raw_text)
+    latin_text_detected = _detect_latin_text_chunk(raw_text) and not raw_has_legacy_encoding
 
     if latin_text_detected:
         corrected_text = raw_text
