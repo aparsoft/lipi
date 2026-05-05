@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lipi-aparsoft"
-version = "1.0.8"
+version = "1.0.9"
 description = "Legacy Hindi font (KrutiDev/Chanakya) to Unicode Devanagari toolkit with PDF splitting"
 readme = "README.md"
 license = "MIT"
@@ -49,12 +49,27 @@ flask = [
   "requests>=2.31.0",
   "werkzeug>=3.0.0",
 ]
+symspell = [
+  "symspellpy>=6.7.7",
+]
+lm = [
+  "kenlm>=0.2.0",
+  "requests>=2.31.0",
+]
+ml = [
+  "transformers>=4.40.0",
+  "torch>=2.0.0",
+]
 dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "black>=24.0",
   "ruff>=0.4.0",
+  "symspellpy>=6.7.7",
 ]
+
+[tool.setuptools.package-data]
+lipi = ["data/*.txt", "data/*.bin", "data/*.arpa"]
 
 [project.scripts]
 lipi = "lipi.cli:main"
