@@ -210,11 +210,22 @@ class HindiPreprocessor:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def post_process(text: str) -> str:
+    def post_process(text: str, repair_doubled_consonant_imatra: bool = True) -> str:
         """
         Clean up common artefacts after KrutiDev → Unicode conversion.
 
         Fixes doubled matras and known mis-spellings.
+
+        Args:
+            text: Devanagari text to clean.
+            repair_doubled_consonant_imatra: When True (default), the
+                ``CC[CONS|anusvara] -> Cि[...]`` repair runs. This is correct
+                for legacy-font extraction (KrutiDev/Chanakya/Walkman) where a
+                lost ि-matra surfaces as a doubled consonant. For
+                already-Devanagari (``scrambled_devanagari``) PDFs this rule
+                damages real Hindi words like ``रुककर``, ``महाकुंभ``, ``समझ``,
+                ``हमला`` — pass False in that pipeline and let the lexicon
+                stage make the disambiguation.
         """
         if not text:
             return text
@@ -231,7 +242,8 @@ class HindiPreprocessor:
         text = _MARK_SPACING_RE.sub(r"\1\2", text)
         text = _HALANT_SPACING_RE.sub(r"\1\2", text)
         text = _LEADING_MATRA_RE.sub(r"\1", text)
-        text = _DUPLICATE_CONSONANT_I_RE.sub(r"\1ि", text)
+        if repair_doubled_consonant_imatra:
+            text = _DUPLICATE_CONSONANT_I_RE.sub(r"\1ि", text)
         text = _SHCHA_IMATRA_RE.sub("श्चि", text)
         text = _NUKTA_BASE_RE.sub(_fix_decomposed_nukta_i, text)
         text = _DUPLICATE_AUXILIARY_RE.sub(r"\1", text)
