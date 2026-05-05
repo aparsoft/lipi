@@ -16,6 +16,9 @@ _SUSPICIOUS_MARK_SEQUENCE_RE = re.compile(r"[ािीुूृेैोौॉ�
 _BROKEN_EMATRA_TOKEN_RE = re.compile(r"[ेै][ािीुूृोौ]")
 _LEADING_IMATRA_TOKEN_RE = re.compile(r"^ि(?=[\u0900-\u097f])")
 _J_IMATRA_SWAP_RE = re.compile(r"ज((?:[क-ह]्)*[क-ह])")
+_LEADING_YI_RE = re.compile(r"^यि")
+_PRE_CLUSTER_IMATRA_RE = re.compile(r"ि(?=[क-हक़-य़]्)")
+_PRE_ANUSVARA_CLUSTER_IMATRA_RE = re.compile(r"ि(?=[ँं][क-हक़-य़])")
 _ZERO_WIDTH_RE = re.compile(r"[\u200c\u200d]")
 _DUPLICATE_HALANT_RE = re.compile(r"्{2,}")
 _HALANT_DUPLICATE_CONSONANT_RE = re.compile(r"्([क-हक़-य़])\1")
@@ -171,10 +174,19 @@ class HindiLexiconCorrector:
         if "ि" not in token:
             return None
 
+        if not (
+            _LEADING_YI_RE.search(token)
+            or _PRE_CLUSTER_IMATRA_RE.search(token)
+            or _PRE_ANUSVARA_CLUSTER_IMATRA_RE.search(token)
+        ):
+            return None
+
         matches = {
             token[:index] + token[index + 1 :]
             for index, char in enumerate(token)
-            if char == "ि" and token[:index] + token[index + 1 :] in self.lexicon
+            if char == "ि"
+            and index < len(token) - 1
+            and token[:index] + token[index + 1 :] in self.lexicon
         }
         if len(matches) == 1:
             return next(iter(matches))
